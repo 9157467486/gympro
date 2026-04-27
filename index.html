@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>GymPro Ultimate</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Clash+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <!-- Firebase v9 compat -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
 :root{
   --bg:#f0f4ff;--white:#fff;--card:#fff;--border:#e2e8f6;--border2:#c7d2ea;
@@ -53,7 +53,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 .role-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
 .role-admin{background:#eff4ff;color:#1a56db}.role-staff{background:#ecfdf5;color:#059669}
 /* Loading overlay */
-#app-loader{position:fixed;inset:0;background:linear-gradient(135deg,#0f172a,#1e3a8a);z-index:9998;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+#app-loader{position:fixed;inset:0;background:linear-gradient(135deg,#0f172a,#1e3a8a);z-index:9998;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;animation:loaderFadeOut 0s 3s forwards}
+@keyframes loaderFadeOut{to{display:none;opacity:0;pointer-events:none}}
 .loader-spin{width:44px;height:44px;border:4px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loader-txt{color:rgba(255,255,255,.8);font-size:14px;font-weight:600}
@@ -1129,21 +1130,41 @@ function initFirebase(config) {
 // BOOT — Check if Firebase configured
 // ══════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
+
+  // Check if Firebase actually loaded
+  if (typeof firebase === 'undefined') {
+    hideLoader();
+    showSetup();
+    return;
+  }
+
   const saved = localStorage.getItem(FB_CONFIG_KEY);
+
+  // No Firebase config saved — show setup immediately, no waiting
   if (!saved) {
     hideLoader();
     showSetup();
     return;
   }
+
+  // Config exists — try to init and watch auth
+  // Safety net: force-show login after 5 seconds if auth never fires
+  const safetyTimer = setTimeout(() => {
+    hideLoader();
+    showLoginScreen();
+  }, 5000);
+
   try {
     const config = JSON.parse(saved);
     if (initFirebase(config)) {
-      watchAuth();
+      watchAuth(safetyTimer);
     } else {
+      clearTimeout(safetyTimer);
       hideLoader();
       showSetup();
     }
   } catch(e) {
+    clearTimeout(safetyTimer);
     hideLoader();
     showSetup();
   }
@@ -1271,8 +1292,9 @@ async function fbSetup() {
 // ══════════════════════════════════════════
 // AUTH WATCHER
 // ══════════════════════════════════════════
-function watchAuth() {
+function watchAuth(safetyTimer) {
   auth.onAuthStateChanged(async user => {
+    if (safetyTimer) clearTimeout(safetyTimer);
     if (user) {
       CURRENT_USER = user;
       // Get role from Firestore
