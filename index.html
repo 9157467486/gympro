@@ -380,6 +380,8 @@ tr:hover td{background:#fafbff}
     <div class="ns">Operations</div>
     <div class="ni" onclick="go('batches')"><div class="nico">📅</div>Batches & Classes</div>
     <div class="ni admin-only" onclick="go('staff')"><div class="nico">👨‍💼</div>Staff & Salary</div>
+    <div class="ni admin-only" onclick="go('salarycalc')" style="background:linear-gradient(135deg,rgba(5,150,105,.06),rgba(16,185,129,.06));border:1px solid rgba(5,150,105,.2)"><div class="nico" style="background:linear-gradient(135deg,#059669,#0d9488);color:#fff">💵</div><span style="color:#059669;font-weight:700">Salary Calc</span> <span style="font-size:10px;background:#059669;color:#fff;padding:1px 5px;border-radius:8px;margin-left:auto">NEW</span></div>
+    <div class="ni admin-only" onclick="go('import')" style="background:linear-gradient(135deg,rgba(234,88,12,.06),rgba(245,158,11,.06));border:1px solid rgba(234,88,12,.2)"><div class="nico" style="background:linear-gradient(135deg,#ea580c,#d97706);color:#fff">📥</div><span style="color:#ea580c;font-weight:700">Import Members</span> <span style="font-size:10px;background:#ea580c;color:#fff;padding:1px 5px;border-radius:8px;margin-left:auto">NEW</span></div>
     <div class="ns">Reports</div>
     <div class="ni admin-only" onclick="go('reports')"><div class="nico">📊</div>Reports</div>
     <div class="ni admin-only" onclick="go('monthly')"><div class="nico">📄</div>Monthly Report</div>
@@ -902,11 +904,152 @@ tr:hover td{background:#fafbff}
   </div><!-- content -->
 </div><!-- main -->
 
+<!-- ═══ SALARY CALCULATOR PAGE ═══ -->
+<div class="page" id="pg-salarycalc" style="display:none">
+  <div class="sec" style="margin-bottom:16px">
+    <div class="sh"><h3>💵 Monthly Salary Calculator</h3>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="month" id="sc-month" style="width:150px" onchange="calcAllSalaries()">
+        <button class="btn bb" onclick="calcAllSalaries()">🔄 Calculate</button>
+        <button class="btn bw" onclick="sendSalaryReportWA()">📱 Send to Owner WhatsApp</button>
+      </div>
+    </div>
+    <div class="sb2">
+      <div class="alert awarn" style="margin-bottom:14px">
+        ⚙️ <strong>Salary Rule:</strong> Present = Full Day | Half Day / Late = 0.5 Day | Absent = 0 Day. 
+        Salary between 1st–10th of month. Staff arriving after shift start time counts as <strong>Half Day</strong>.
+      </div>
+      <div id="sc-table-wrap">
+        <div class="emp"><div class="ei">💵</div><p>Select a month and click Calculate</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="sh"><h3>📋 Mark Staff Attendance with Time</h3></div>
+    <div class="sb2">
+      <div class="fgrid">
+        <div class="fg"><label>Staff *</label><select id="sc-staff"><option value="">Select Staff</option></select></div>
+        <div class="fg"><label>Date *</label><input type="date" id="sc-date"></div>
+        <div class="fg"><label>Arrival Time</label><input type="time" id="sc-arrive" placeholder="e.g. 06:15"></div>
+        <div class="fg"><label>Status</label><select id="sc-status"><option value="present">✅ Present (on time)</option><option value="late">⏰ Late (auto half-day)</option><option value="half">🌗 Half Day</option><option value="absent">❌ Absent</option><option value="leave">🏖 On Leave</option></select></div>
+      </div>
+      <button class="btn bb" style="margin-top:10px" onclick="markStaffAttTime()">✅ Mark Attendance</button>
+      <div id="sc-att-alert" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ EXCEL / CSV IMPORT PAGE ═══ -->
+<div class="page" id="pg-import" style="display:none">
+  <div class="sec" style="margin-bottom:16px">
+    <div class="sh"><h3>📥 Import Members from Excel / CSV</h3></div>
+    <div class="sb2">
+      <div class="alert" style="background:#eff4ff;border:1px solid var(--blue-soft);color:var(--blue);margin-bottom:16px">
+        💡 <strong>Coming from old software?</strong> Export your members to Excel/CSV and upload here. All active members will be imported instantly — just enroll biometrics and they're ready!
+      </div>
+
+      <!-- Step 1 -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:12px">
+        <div style="font-weight:700;color:var(--blue);margin-bottom:8px">📋 Step 1 — Download Template</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:10px">Download our Excel template and fill in your members, or map your existing columns in Step 3.</p>
+        <button class="btn bb bsm" onclick="dlImportTemplate()">📥 Download Template (CSV)</button>
+      </div>
+
+      <!-- Step 2 -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:12px">
+        <div style="font-weight:700;color:var(--blue);margin-bottom:8px">📂 Step 2 — Upload Your File</div>
+        <div style="border:2px dashed var(--border2);border-radius:var(--r2);padding:28px;text-align:center;cursor:pointer;background:#fff" onclick="document.getElementById('imp-excel').click()">
+          <div style="font-size:36px;margin-bottom:8px">📊</div>
+          <div style="font-weight:700;color:var(--text2)">Click to upload CSV / Excel file</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Supports .csv and .xlsx files</div>
+        </div>
+        <input type="file" id="imp-excel" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadImportFile(this)">
+        <div id="imp-file-info" style="margin-top:8px;font-size:12px;color:var(--text3)"></div>
+      </div>
+
+      <!-- Step 3 -->
+      <div id="imp-mapping-section" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:12px">
+        <div style="font-weight:700;color:var(--blue);margin-bottom:8px">🗂 Step 3 — Map Columns</div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Match your file's columns to GymPro fields:</p>
+        <div class="fgrid" id="imp-map-grid"></div>
+      </div>
+
+      <!-- Step 4 - Preview -->
+      <div id="imp-preview-section" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-weight:700;color:var(--blue)">👁 Step 4 — Preview</div>
+          <span class="pill pg" id="imp-valid-count">0 valid</span>
+        </div>
+        <div class="tw" style="max-height:300px;overflow-y:auto">
+          <table><thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Plan</th><th>Expiry</th><th>Status</th></tr></thead>
+          <tbody id="imp-preview-tb"></tbody></table>
+        </div>
+      </div>
+
+      <!-- Import Button -->
+      <div id="imp-action" style="display:none">
+        <button class="btn bg" style="width:100%;padding:14px;font-size:15px" onclick="doExcelImport()">🚀 Import All Members to GymPro</button>
+        <div id="imp-progress" style="margin-top:12px;display:none">
+          <div style="background:var(--border);border-radius:4px;height:8px;margin-bottom:6px"><div id="imp-prog-bar" style="background:var(--green);height:8px;border-radius:4px;transition:width .3s;width:0%"></div></div>
+          <div id="imp-prog-txt" style="font-size:12px;color:var(--text3);text-align:center">Importing...</div>
+        </div>
+      </div>
+
+      <div id="imp-result" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- Existing member list reminder -->
+  <div class="sec">
+    <div class="sh"><h3>ℹ️ After Import — Next Steps</h3></div>
+    <div class="sb2">
+      <div class="g3" style="gap:12px">
+        <div class="hb-g hb" style="text-align:center">
+          <div style="font-size:28px;margin-bottom:6px">1️⃣</div>
+          <div style="font-weight:700;font-size:13px">Import Members</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Upload Excel, map columns, import</div>
+        </div>
+        <div class="hb-b hb" style="text-align:center">
+          <div style="font-size:28px;margin-bottom:6px">2️⃣</div>
+          <div style="font-weight:700;font-size:13px">Enroll Biometrics</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Go to Biometric → Enroll each member's finger</div>
+        </div>
+        <div class="hb hb-o" style="text-align:center">
+          <div style="font-size:28px;margin-bottom:6px">3️⃣</div>
+          <div style="font-weight:700;font-size:13px">Ready to Use!</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Members scan finger, attendance auto-marks</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ MODALS ═══ -->
 <div class="mo" id="rcpt-mo"><div class="md"><div class="mh"><h3>🧾 Payment Receipt</h3><div class="cx" onclick="closeM('rcpt-mo')">✕</div></div><div class="mb"><div id="rcpt-html"></div></div><div class="mf"><button class="btn bw" onclick="waFromRcpt()">📱 WhatsApp</button><button class="btn bo" onclick="printRcpt()">🖨 Print</button><button class="btn bgh" onclick="closeM('rcpt-mo')">Close</button></div></div></div>
 <div class="mo" id="mem-mo"><div class="md md-lg"><div class="mh"><h3>👤 Member Profile</h3><div class="cx" onclick="closeM('mem-mo')">✕</div></div><div class="mb" id="mem-mo-body"></div><div class="mf"><button class="btn bb" onclick="goCollect()">💰 Collect Fee</button><button class="btn bw" onclick="waViewed()">📱 WhatsApp</button><button class="btn bo" onclick="showMemberCard(viewedId)">🪪 ID Card</button><button class="btn bgh" onclick="closeM('mem-mo')">Close</button></div></div></div>
 <div class="mo" id="plan-mo"><div class="md"><div class="mh"><h3>📋 Membership Plan</h3><div class="cx" onclick="closeM('plan-mo')">✕</div></div><div class="mb"><div class="fgrid"><div class="fg"><label>Name *</label><input type="text" id="pmn" placeholder="e.g. Monthly"></div><div class="fg"><label>Days *</label><input type="number" id="pmd" placeholder="e.g. 30"></div><div class="fg"><label>Price (₹) *</label><input type="number" id="pmp" placeholder="e.g. 1200"></div><div class="fg"><label>Description</label><input type="text" id="pmds" placeholder="Short desc"></div></div></div><div class="mf"><button class="btn bb" onclick="savePlan()">💾 Save</button><button class="btn bgh" onclick="closeM('plan-mo')">Cancel</button></div></div></div>
-<div class="mo" id="staff-mo"><div class="md"><div class="mh"><h3>👨‍💼 Add Staff / Trainer</h3><div class="cx" onclick="closeM('staff-mo')">✕</div></div><div class="mb"><div class="fgrid"><div class="fg"><label>Name *</label><input type="text" id="sfn"></div><div class="fg"><label>Role *</label><select id="sfr"><option>Trainer</option><option>Manager</option><option>Receptionist</option><option>Cleaner</option><option>Other</option></select></div><div class="fg"><label>Phone</label><input type="text" id="sfp"></div><div class="fg"><label>Salary (₹/month)</label><input type="number" id="sfs"></div><div class="fg"><label>Join Date</label><input type="date" id="sfj"></div><div class="fg"><label>Specialization</label><input type="text" id="sfsp"></div></div></div><div class="mf"><button class="btn bb" onclick="saveStaff()">💾 Save</button><button class="btn bgh" onclick="closeM('staff-mo')">Cancel</button></div></div></div>
+<div class="mo" id="staff-mo"><div class="md"><div class="mh"><h3 id="staff-mo-title">👨‍💼 Add Staff / Trainer</h3><div class="cx" onclick="closeM('staff-mo')">✕</div></div><div class="mb">
+  <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:12px">
+    <div style="text-align:center">
+      <div id="sf-photo-prev" style="width:70px;height:70px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--teal));display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;font-family:'Clash Display',sans-serif;overflow:hidden;border:2px solid var(--blue-soft)">?</div>
+      <label style="display:block;margin-top:5px;cursor:pointer;font-size:11px;color:var(--blue);font-weight:700">📷 Photo<input type="file" id="sfph" accept="image/*" style="display:none" onchange="prevStaffPh(this)"></label>
+    </div>
+    <div style="flex:1">
+      <div class="fgrid">
+        <div class="fg"><label>Name *</label><input type="text" id="sfn" placeholder="e.g. Ramesh Patel"></div>
+        <div class="fg"><label>Role *</label><select id="sfr"><option>Trainer</option><option>Manager</option><option>Receptionist</option><option>Cleaner</option><option>Other</option></select></div>
+        <div class="fg"><label>Phone *</label><input type="tel" id="sfp" placeholder="10-digit number" maxlength="10" inputmode="numeric"></div>
+        <div class="fg"><label>Salary (₹/month) *</label><input type="number" id="sfs" placeholder="e.g. 12000"></div>
+        <div class="fg"><label>Join Date</label><input type="date" id="sfj"></div>
+        <div class="fg"><label>Specialization</label><input type="text" id="sfsp" placeholder="e.g. Weight Training"></div>
+        <div class="fg"><label>Shift Start Time</label><input type="time" id="sf-shift-start" placeholder="e.g. 06:00" value="06:00"></div>
+        <div class="fg"><label>Shift End Time</label><input type="time" id="sf-shift-end" placeholder="e.g. 14:00" value="14:00"></div>
+      </div>
+    </div>
+  </div>
+  <div class="alert awarn" style="font-size:12px">⏰ <strong>Late Rule:</strong> If staff arrives after shift start time, it counts as a <strong>Half Day</strong>. Salary = Full Day × (Present + Half×0.5) ÷ Working Days.</div>
+  <input type="hidden" id="sf-edit-id">
+</div><div class="mf"><button class="btn bb" id="sf-save-btn" onclick="saveStaff()">💾 Save</button><button class="btn bgh" onclick="closeM('staff-mo')">Cancel</button></div></div></div>
 <div class="mo" id="batch-mo"><div class="md"><div class="mh"><h3>📅 Add Batch / Class</h3><div class="cx" onclick="closeM('batch-mo')">✕</div></div><div class="mb"><div class="fgrid"><div class="fg"><label>Name *</label><input type="text" id="btn2" placeholder="e.g. Morning Batch"></div><div class="fg"><label>Timing *</label><input type="text" id="btt" placeholder="e.g. 6:00–8:00 AM"></div><div class="fg"><label>Days</label><input type="text" id="btd" placeholder="e.g. Mon–Sat"></div><div class="fg"><label>Trainer</label><select id="bttr"><option value="">No Trainer</option></select></div><div class="fg"><label>Max Capacity</label><input type="number" id="btc" placeholder="e.g. 30"></div><div class="fg"><label>Type</label><select id="bttp"><option>Gym</option><option>Yoga</option><option>Zumba</option><option>CrossFit</option><option>Cardio</option><option>Other</option></select></div></div></div><div class="mf"><button class="btn bb" onclick="saveBatch()">💾 Save</button><button class="btn bgh" onclick="closeM('batch-mo')">Cancel</button></div></div></div>
 <div class="mo" id="exp-mo"><div class="md"><div class="mh"><h3>💸 Add Expense</h3><div class="cx" onclick="closeM('exp-mo')">✕</div></div><div class="mb"><div class="fgrid"><div class="fg"><label>Category *</label><select id="exc"><option>Equipment</option><option>Electricity</option><option>Rent</option><option>Maintenance</option><option>Marketing</option><option>Other</option></select></div><div class="fg"><label>Amount (₹) *</label><input type="number" id="exa"></div><div class="fg"><label>Date *</label><input type="date" id="exd"></div><div class="fg"><label>Mode</label><select id="exm"><option>Cash</option><option>UPI</option><option>Bank</option></select></div><div class="fg full"><label>Description</label><input type="text" id="exn" placeholder="What for?"></div></div></div><div class="mf"><button class="btn bb" onclick="saveExp()">💾 Save</button><button class="btn bgh" onclick="closeM('exp-mo')">Cancel</button></div></div></div>
 
@@ -917,7 +1060,10 @@ tr:hover td{background:#fafbff}
   <div class="fgrid">
     <div class="fg"><label>Staff Name *</label><input type="text" id="sa-name" placeholder="Trainer Ramesh"></div>
     <div class="fg"><label>Role</label><select id="sa-role"><option>Trainer</option><option>Receptionist</option><option>Manager</option></select></div>
-    <div class="fg full"><label>Email (for login) *</label><input type="email" id="sa-email" placeholder="staff@gmail.com"></div>
+    <div class="fg full"><label>Phone Number * (used as login)</label><input type="tel" id="sa-phone" placeholder="10-digit phone" maxlength="10" inputmode="numeric"></div>
+    <div class="fg full" style="background:var(--blue-lt);border:1px solid var(--blue-soft);border-radius:8px;padding:10px;font-size:12px;color:var(--blue)">
+      📧 Login email will be auto-created as: <strong id="sa-email-preview">phone@gympro.staff</strong>
+    </div>
     <div class="fg full"><label>Password *</label><input type="password" id="sa-pass" placeholder="Min 6 characters"></div>
   </div>
   <div id="sa-err" style="color:var(--red);font-size:12px;margin-top:8px;min-height:16px"></div>
@@ -1337,31 +1483,32 @@ function logout() {
 }
 
 // ══════════════════════════════════════════
-// CREATE STAFF ACCOUNT (Admin only)
+// CREATE STAFF ACCOUNT (Admin only) - Phone-based login
 // ══════════════════════════════════════════
 async function createStaffAccount() {
   if (!requireAdmin('create staff accounts')) return;
   const name  = document.getElementById('sa-name').value.trim();
   const role  = document.getElementById('sa-role').value;
-  const email = document.getElementById('sa-email').value.trim();
+  const phone = document.getElementById('sa-phone').value.trim();
   const pass  = document.getElementById('sa-pass').value.trim();
   const errEl = document.getElementById('sa-err');
   const btn   = document.getElementById('sa-btn');
   errEl.textContent = '';
-  if (!name || !email || pass.length < 6) { errEl.textContent = '❌ Fill all fields. Password min 6 chars.'; return; }
+  if (!name || !phone || pass.length < 6) { errEl.textContent = '❌ Fill all fields. Phone required. Password min 6 chars.'; return; }
+  if (!/^\d{10}$/.test(phone)) { errEl.textContent = '❌ Enter valid 10-digit phone number!'; return; }
+  // Auto-generate email from phone
+  const email = phone + '@gympro.staff';
   btn.textContent = 'Creating...'; btn.disabled = true;
 
   try {
-    // Create secondary auth app temporarily
     const savedConfig = JSON.parse(localStorage.getItem(FB_CONFIG_KEY));
     const secondApp = firebase.initializeApp(savedConfig, 'secondApp_' + Date.now());
     const secondAuth = secondApp.auth();
     const cred = await secondAuth.createUserWithEmailAndPassword(email, pass);
-    const uid = cred.user.uid;
+    const uid2 = cred.user.uid;
 
-    // Write user doc with staff role + link to this admin
-    await db.collection('users').doc(uid).set({
-      email, role: 'staff', name, jobRole: role,
+    await db.collection('users').doc(uid2).set({
+      email, phone, role: 'staff', name, jobRole: role,
       adminId: ADMIN_UID, createdAt: new Date().toISOString()
     });
 
@@ -1369,20 +1516,30 @@ async function createStaffAccount() {
     await secondApp.delete();
 
     errEl.style.color = 'green';
-    errEl.textContent = `✅ Staff account created! They can login with: ${email}`;
+    errEl.textContent = `✅ Account created! Staff logs in with phone: ${phone} and their password.`;
     btn.textContent = '✅ Create Account'; btn.disabled = false;
+    // Update preview
+    loadStaffAccounts();
     setTimeout(() => {
-      ['sa-name','sa-email','sa-pass'].forEach(id => document.getElementById(id).value='');
+      ['sa-name','sa-phone','sa-pass'].forEach(id => document.getElementById(id).value='');
       errEl.textContent='';
       closeM('staffacc-mo');
-    }, 2500);
+    }, 2800);
   } catch(e) {
     let msg = e.message;
-    if (e.code==='auth/email-already-in-use') msg='This email is already registered!';
+    if (e.code==='auth/email-already-in-use') msg='This phone number already has an account!';
     errEl.style.color='red'; errEl.textContent='❌ '+msg;
     btn.textContent='✅ Create Account'; btn.disabled=false;
   }
 }
+// Show auto email preview as user types phone
+document.addEventListener('DOMContentLoaded', () => {
+  const phoneInp = document.getElementById('sa-phone');
+  if (phoneInp) phoneInp.addEventListener('input', () => {
+    const prev = document.getElementById('sa-email-preview');
+    if (prev) prev.textContent = (phoneInp.value||'phone') + '@gympro.staff';
+  });
+});
 
 // ══════════════════════════════════════════
 // DIET TEMPLATES
@@ -1808,9 +1965,63 @@ function bulkR(grp){const map={week:m=>{const d=dLeft(m.expiry);return d>=0&&d<=
 function renderStaffGrid(){
   const el=document.getElementById('staff-grid');if(!el)return;
   if(!DB.staff.length){el.innerHTML=`<div style="text-align:center;padding:28px;color:var(--text3)">No staff added yet.</div>`;return;}
-  el.innerHTML=DB.staff.map(s=>`<div class="staff-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:11px">${av(s.name,'md')}<span class="pill pb">${s.role}</span></div><div style="font-weight:700;font-size:15px;margin-bottom:3px">${s.name}</div><div style="font-size:12px;color:var(--text3)">${s.phone||'No phone'}</div><div style="font-size:12px;color:var(--text3);margin-top:3px">${s.specialization||'General'}</div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:11px;padding-top:9px;border-top:1px solid var(--border)"><span style="font-weight:700;color:var(--green)">${fmtINR(s.salary)}/mo</span>${CURRENT_ROLE==='admin'?`<button class="btn br bxs" onclick="delStaff('${s.id}')">🗑</button>`:''}</div></div>`).join('');
+  el.innerHTML=DB.staff.map(s=>{
+    const photoEl=s.photo?`<div class="av av-md" style="border:2px solid var(--blue-soft)"><img src="${s.photo}"></div>`:`<div class="av av-md" style="background:linear-gradient(135deg,var(--blue),var(--teal));color:#fff;font-size:18px;font-weight:700">${s.name[0].toUpperCase()}</div>`;
+    return`<div class="staff-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:11px">
+        ${photoEl}
+        <div style="display:flex;gap:5px">
+          <span class="pill pb">${s.role}</span>
+          ${CURRENT_ROLE==='admin'?`<button class="btn bgh bxs" onclick="openStaffModal('${s.id}')">✏️</button><button class="btn br bxs" onclick="delStaff('${s.id}')">🗑</button>`:''}
+        </div>
+      </div>
+      <div style="font-weight:700;font-size:15px;margin-bottom:3px">${s.name}</div>
+      <div style="font-size:12px;color:var(--text3)">📞 ${s.phone||'No phone'}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px">⚡ ${s.specialization||'General'}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px">⏰ Shift: ${s.shiftStart||'06:00'} – ${s.shiftEnd||'14:00'}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:11px;padding-top:9px;border-top:1px solid var(--border)">
+        <span style="font-weight:700;color:var(--green)">${fmtINR(s.salary)}/mo</span>
+        <button class="btn bb bxs" onclick="openSalaryCalcFor('${s.id}')">💵 Salary</button>
+      </div>
+    </div>`;
+  }).join('');
 }
-function openStaffModal(){if(!requireAdmin('add staff'))return;['sfn','sfp','sfs','sfsp'].forEach(id=>document.getElementById(id).value='');document.getElementById('sfj').valueAsDate=new Date();openM('staff-mo');}
+let sfPhotoData = null;
+function prevStaffPh(inp){if(!inp.files[0])return;const r=new FileReader();r.onload=e=>{sfPhotoData=e.target.result;const prev=document.getElementById('sf-photo-prev');prev.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;};r.readAsDataURL(inp.files[0]);}
+function openStaffModal(editId){
+  if(!requireAdmin('add staff'))return;
+  sfPhotoData=null;
+  const titleEl=document.getElementById('staff-mo-title');
+  const editEl=document.getElementById('sf-edit-id');
+  const btnEl=document.getElementById('sf-save-btn');
+  if(editId){
+    const s=DB.staff.find(x=>x.id==editId);if(!s)return;
+    document.getElementById('sfn').value=s.name||'';
+    document.getElementById('sfr').value=s.role||'Trainer';
+    document.getElementById('sfp').value=s.phone||'';
+    document.getElementById('sfs').value=s.salary||'';
+    document.getElementById('sfj').value=s.joinDate||'';
+    document.getElementById('sfsp').value=s.specialization||'';
+    document.getElementById('sf-shift-start').value=s.shiftStart||'06:00';
+    document.getElementById('sf-shift-end').value=s.shiftEnd||'14:00';
+    const prev=document.getElementById('sf-photo-prev');
+    if(s.photo){sfPhotoData=s.photo;prev.innerHTML=`<img src="${s.photo}" style="width:100%;height:100%;object-fit:cover">`;}
+    else{sfPhotoData=null;prev.innerHTML=s.name?s.name[0].toUpperCase():'?';}
+    editEl.value=editId;
+    if(titleEl)titleEl.textContent='✏️ Edit Staff';
+    if(btnEl)btnEl.textContent='💾 Update';
+  } else {
+    ['sfn','sfp','sfs','sfsp'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('sfj').valueAsDate=new Date();
+    document.getElementById('sf-shift-start').value='06:00';
+    document.getElementById('sf-shift-end').value='14:00';
+    const prev=document.getElementById('sf-photo-prev');prev.innerHTML='?';
+    editEl.value='';
+    if(titleEl)titleEl.textContent='👨‍💼 Add Staff / Trainer';
+    if(btnEl)btnEl.textContent='💾 Save';
+  }
+  openM('staff-mo');
+}
 function swStaff(tab, el){
   document.querySelectorAll('#pg-staff .tabs .tab').forEach(t=>t.classList.remove('active'));
   if(el) el.classList.add('active');
@@ -1825,8 +2036,28 @@ function swStaff(tab, el){
 async function saveStaff(){
   if(!requireAdmin('add staff'))return;
   const n=document.getElementById('sfn').value.trim();if(!n){alert('Enter name!');return;}
-  const s={id:uid(),name:n,role:document.getElementById('sfr').value,phone:document.getElementById('sfp').value.trim(),salary:+document.getElementById('sfs').value||0,joinDate:document.getElementById('sfj').value,specialization:document.getElementById('sfsp').value.trim()};
-  DB.staff.push(s);await saveItem('staff',s);popTrainers();popStaff();renderStaffGrid();closeM('staff-mo');
+  const editId=document.getElementById('sf-edit-id').value;
+  const s={
+    id:editId||uid(),
+    name:n,
+    role:document.getElementById('sfr').value,
+    phone:document.getElementById('sfp').value.trim(),
+    salary:+document.getElementById('sfs').value||0,
+    joinDate:document.getElementById('sfj').value,
+    specialization:document.getElementById('sfsp').value.trim(),
+    shiftStart:document.getElementById('sf-shift-start').value||'06:00',
+    shiftEnd:document.getElementById('sf-shift-end').value||'14:00',
+    photo:sfPhotoData||''
+  };
+  if(editId){
+    const idx=DB.staff.findIndex(x=>x.id==editId);
+    if(idx>=0)DB.staff[idx]=s;else DB.staff.push(s);
+  } else {
+    DB.staff.push(s);
+  }
+  await saveItem('staff',s);
+  popTrainers();popStaff();renderStaffGrid();closeM('staff-mo');
+  sfPhotoData=null;
 }
 async function delStaff(id){if(!requireAdmin('delete staff'))return;if(!confirm('Delete?'))return;DB.staff=DB.staff.filter(s=>s.id!=id);await deleteItem('staff',id);popTrainers();popStaff();renderStaffGrid();}
 function renderSalary(){
@@ -2137,24 +2368,47 @@ function checkAutoRep(){
     const pk=pm.getFullYear()+'-'+(pm.getMonth()+1).toString().padStart(2,'0');
     DB.lastRep=k;
     db.collection('meta').doc(ADMIN_UID).update({lastRep:k});
-    setTimeout(()=>{if(confirm('📊 Auto Monthly Report: Send last month to Owner WhatsApp?'))sendMonthlyWA(pk);},2000);
+    setTimeout(()=>{
+      if(confirm('📊 Auto Monthly Report: Send last month to Owner WhatsApp?'))sendMonthlyWA(pk);
+    },2000);
+    // Also prompt for salary report on 1st
+    setTimeout(()=>{
+      if(DB.staff.length&&confirm('💵 Auto Salary Report: Send salary summary for last month?'))sendSalaryReportWA_month(pk);
+    },4000);
   }
+}
+function sendSalaryReportWA_month(mon){
+  const owner=DB.settings.waOwner;if(!owner)return;
+  const g=DB.settings;
+  const results=DB.staff.map(s=>calcStaffSalary(s,mon));
+  const lines=results.map(r=>`• ${r.staff.name}: ${r.presentDays}d → *${fmtINR(r.earned)}*`).join('\n');
+  const total=results.reduce((s,r)=>s+r.earned,0);
+  const msg=`💵 *Salary Report — ${fmtM(mon)}*\n*${g.gymName||'GymPro'}*\n\n${lines}\n\n💰 *Total Payable: ${fmtINR(total)}*\n\nSalary due between 1st–10th\n\n— GymPro Management System`;
+  const ph=owner.startsWith('91')?owner:'91'+owner;
+  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(msg)}`,'_blank');
 }
 
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const TITLES={dashboard:'🏠 Dashboard',members:'👥 All Members',addmember:'➕ Add Member',attendance:'✅ Attendance',biometric:'🖐 Biometric Attendance',expiry:'⏰ Expiry Alerts',fees:'💰 Collect Fees',history:'🧾 Payment History',diet:'🥗 Diet Plans',pt:'🏆 Personal Training',batches:'📅 Batches & Classes',staff:'👨‍💼 Staff & Salary',reports:'📊 Reports & Profit',monthly:'📄 Monthly Report',whatsapp:'📱 WhatsApp Center',settings:'⚙️ Settings'};
+const TITLES={dashboard:'🏠 Dashboard',members:'👥 All Members',addmember:'➕ Add Member',attendance:'✅ Attendance',biometric:'🖐 Biometric Attendance',expiry:'⏰ Expiry Alerts',fees:'💰 Collect Fees',history:'🧾 Payment History',diet:'🥗 Diet Plans',pt:'🏆 Personal Training',batches:'📅 Batches & Classes',staff:'👨‍💼 Staff & Salary',reports:'📊 Reports & Profit',monthly:'📄 Monthly Report',whatsapp:'📱 WhatsApp Center',settings:'⚙️ Settings',salarycalc:'💵 Salary Calculator',import:'📥 Import Members'};
 function go(name){
   // Staff access control
-  const adminPages=['reports','monthly','settings','staff'];
+  const adminPages=['reports','monthly','settings','staff','salarycalc','import'];
   if(adminPages.includes(name)&&CURRENT_ROLE!=='admin'){alert('🔒 Admin only section!');return;}
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>{p.classList.remove('active');});
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
-  const pg=document.getElementById('pg-'+name);if(pg)pg.classList.add('active');
+  // Handle new pages that use display:none instead of .page class
+  const newPages=['salarycalc','import'];
+  if(newPages.includes(name)){
+    const pg=document.getElementById('pg-'+name);
+    if(pg){pg.style.display='';pg.classList.add('active');}
+  } else {
+    const pg=document.getElementById('pg-'+name);if(pg)pg.classList.add('active');
+  }
   document.getElementById('pgtitle').textContent=TITLES[name]||name;
   document.querySelectorAll('.ni').forEach(n=>{if((n.getAttribute('onclick')||'').includes("'"+name+"'"))n.classList.add('active');});
-  const rf={dashboard:renderDashboard,members:renderMembers,history:renderHist,reports:renderReports||genReport,expiry:()=>renderExpiry(curExpTab),attendance:()=>{renderAtt();renderAttToday();},batches:renderBatches,diet:()=>{renderDietPreview(curDietTab);renderDietTable();},biometric:initBioPage};
+  const rf={dashboard:renderDashboard,members:renderMembers,history:renderHist,reports:renderReports||genReport,expiry:()=>renderExpiry(curExpTab),attendance:()=>{renderAtt();renderAttToday();},batches:renderBatches,diet:()=>{renderDietPreview(curDietTab);renderDietTable();},biometric:initBioPage,salarycalc:initSalaryCalcPage};
   if(rf[name])rf[name]();
   if(name==='fees'){popPlans();document.getElementById('fed').valueAsDate=new Date();}
   if(name==='addmember'){popPlans();popTrainers();popBatches();document.getElementById('amj').valueAsDate=new Date();}
@@ -2777,7 +3031,352 @@ function showToast(msg, type='ok', dur=3500){
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 320); }, dur);
 }
 
-</script>
+// ══════════════════════════════════════════
+// SALARY CALCULATOR
+// ══════════════════════════════════════════
+function initSalaryCalcPage(){
+  const monthEl=document.getElementById('sc-month');
+  if(monthEl&&!monthEl.value)monthEl.value=new Date().toISOString().slice(0,7);
+  // populate staff dropdown
+  const sel=document.getElementById('sc-staff');
+  if(sel){sel.innerHTML='<option value="">Select Staff</option>'+DB.staff.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');}
+  // set today's date
+  const dateEl=document.getElementById('sc-date');if(dateEl)dateEl.valueAsDate=new Date();
+  calcAllSalaries();
+}
+
+function openSalaryCalcFor(staffId){
+  go('salarycalc');
+  setTimeout(()=>{
+    const monthEl=document.getElementById('sc-month');
+    if(monthEl&&!monthEl.value)monthEl.value=new Date().toISOString().slice(0,7);
+    calcAllSalaries();
+  },100);
+}
+
+function getWorkingDaysInMonth(yearMonth){
+  // Returns total days in that month
+  const [y,m]=yearMonth.split('-').map(Number);
+  return new Date(y,m,0).getDate();
+}
+
+function calcStaffSalary(staff, yearMonth){
+  const totalDays=getWorkingDaysInMonth(yearMonth);
+  // Get attendance records for this staff this month
+  const attRecs=DB.staffAtt.filter(a=>a.staffId==staff.id&&a.date.startsWith(yearMonth));
+  let presentDays=0;
+  attRecs.forEach(a=>{
+    if(a.status==='present'||a.status==='present-ontime')presentDays+=1;
+    else if(a.status==='late'||a.status==='half')presentDays+=0.5;
+    else if(a.status==='leave')presentDays+=0.5; // leave = half day for salary
+    // absent = 0
+  });
+  const perDay=staff.salary/totalDays;
+  const earned=Math.round(perDay*presentDays);
+  const deduction=staff.salary-earned;
+  // Is salary due? (between 1-10 of NEXT month)
+  const today=new Date();
+  const [ym,mm]=yearMonth.split('-').map(Number);
+  const nextMonth=new Date(ym,mm,1); // 1st of next month
+  const payWindowEnd=new Date(ym,mm,10); // 10th of next month
+  const salaryDue=today>=nextMonth&&today<=payWindowEnd;
+  const alreadyPaid=DB.salaries.some(s=>s.staffId==staff.id&&s.month===yearMonth);
+  return{staff,yearMonth,totalDays,presentDays,earned,deduction,salaryDue,alreadyPaid,attRecs};
+}
+
+function calcAllSalaries(){
+  const mon=document.getElementById('sc-month')?.value||new Date().toISOString().slice(0,7);
+  const wrap=document.getElementById('sc-table-wrap');if(!wrap)return;
+  if(!DB.staff.length){wrap.innerHTML=`<div class="emp"><div class="ei">👨‍💼</div><p>No staff added yet.</p></div>`;return;}
+  const results=DB.staff.map(s=>calcStaffSalary(s,mon));
+  const totalPayable=results.reduce((s,r)=>s+r.earned,0);
+  const totalPaid=results.filter(r=>r.alreadyPaid).reduce((s,r)=>{
+    const rec=DB.salaries.find(x=>x.staffId==r.staff.id&&x.month===mon);
+    return s+(rec?rec.amount:0);
+  },0);
+  wrap.innerHTML=`
+  <div class="sr sr4" style="margin-bottom:14px">
+    <div class="sc sc-b"><div class="sc-num" style="color:var(--blue)">${DB.staff.length}</div><div class="sc-lbl">Total Staff</div></div>
+    <div class="sc sc-g"><div class="sc-num" style="color:var(--green)">${fmtINR(totalPayable)}</div><div class="sc-lbl">Total Payable</div></div>
+    <div class="sc sc-r"><div class="sc-num" style="color:var(--orange)">${fmtINR(totalPaid)}</div><div class="sc-lbl">Already Paid</div></div>
+    <div class="sc sc-p"><div class="sc-num" style="color:var(--purple)">${fmtINR(totalPayable-totalPaid)}</div><div class="sc-lbl">Remaining</div></div>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Staff</th><th>Shift</th><th>Present Days</th><th>Half Days</th><th>Absent</th><th>Earned</th><th>Deduction</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody>
+    ${results.map(r=>{
+      const halfDays=r.attRecs.filter(a=>a.status==='late'||a.status==='half'||a.status==='leave').length;
+      const absentDays=r.totalDays-r.attRecs.length;
+      const fullPresent=r.attRecs.filter(a=>a.status==='present'||a.status==='present-ontime').length;
+      const paidRec=r.alreadyPaid?DB.salaries.find(x=>x.staffId==r.staff.id&&x.month===mon):null;
+      const staffPhoto=r.staff.photo?`<div class="av av-sm" style="border:1.5px solid var(--blue)"><img src="${r.staff.photo}"></div>`:av(r.staff.name,'sm');
+      return`<tr>
+        <td><div style="display:flex;align-items:center;gap:7px">${staffPhoto}<div><div style="font-weight:700">${r.staff.name}</div><div style="font-size:11px;color:var(--text3)">${r.staff.role}</div></div></div></td>
+        <td style="font-size:12px;color:var(--text3)">${r.staff.shiftStart||'06:00'}–${r.staff.shiftEnd||'14:00'}</td>
+        <td style="font-weight:700;color:var(--green)">${fullPresent}</td>
+        <td style="color:var(--orange)">${halfDays} <span style="font-size:11px;color:var(--text3)">(×0.5)</span></td>
+        <td style="color:var(--red)">${absentDays}</td>
+        <td style="font-weight:700;color:var(--green)">${fmtINR(r.earned)}</td>
+        <td style="color:${r.deduction>0?'var(--red)':'var(--text3)'}">−${fmtINR(r.deduction)}</td>
+        <td>${r.alreadyPaid?`<span class="pill pg">✅ Paid ${fmtD(paidRec?.date||'')}</span>`:(r.salaryDue?`<span class="pill pa">⏳ Due Now</span>`:`<span class="pill pb">Pending</span>`)}</td>
+        <td><div class="tda">
+          ${!r.alreadyPaid&&CURRENT_ROLE==='admin'?`<button class="btn bb bxs" onclick="paySalaryCalc('${r.staff.id}','${mon}',${r.earned})">💰 Pay ${fmtINR(r.earned)}</button>`:''}
+          <button class="btn bw bxs" onclick="sendSalarySlipWA('${r.staff.id}','${mon}')">📱 Slip</button>
+        </div></td>
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+async function paySalaryCalc(staffId, mon, amount){
+  if(!requireAdmin('pay salary'))return;
+  const s=DB.staff.find(x=>x.id==staffId);if(!s)return;
+  if(!confirm(`Pay ${fmtINR(amount)} to ${s.name} for ${fmtM(mon)}?`))return;
+  const mode=prompt('Payment mode? (Cash / UPI / Bank Transfer)','Cash')||'Cash';
+  const rec={id:uid(),staffId,staffName:s.name,month:mon,amount,date:td(),mode};
+  DB.salaries.push(rec);await saveItem('salaries',rec);
+  calcAllSalaries();
+  // Also send WhatsApp slip
+  if(confirm('Send salary slip on WhatsApp?'))sendSalarySlipWA(staffId,mon);
+}
+
+function sendSalarySlipWA(staffId,mon){
+  const s=DB.staff.find(x=>x.id==staffId);if(!s||!s.phone){alert('Staff phone not set!');return;}
+  const r=calcStaffSalary(s,mon);
+  const g=DB.settings;
+  const paidRec=DB.salaries.find(x=>x.staffId==staffId&&x.month===mon);
+  const halfDays=r.attRecs.filter(a=>a.status==='late'||a.status==='half'||a.status==='leave').length;
+  const absentDays=r.totalDays-r.attRecs.length;
+  const fullPresent=r.attRecs.filter(a=>a.status==='present'||a.status==='present-ontime').length;
+  const msg=`💵 *Salary Slip — ${fmtM(mon)}*\n*${g.gymName||'GymPro'}*\n\n👤 Name: *${s.name}*\n📋 Role: ${s.role}\n⏰ Shift: ${s.shiftStart||'06:00'}–${s.shiftEnd||'14:00'}\n\n📅 Working Days: ${r.totalDays}\n✅ Present: ${fullPresent} day(s)\n🌗 Half Days: ${halfDays} day(s)\n❌ Absent: ${absentDays} day(s)\n\n💰 Base Salary: *${fmtINR(s.salary)}*\n📉 Deduction: *${fmtINR(r.deduction)}*\n✅ Net Salary: *${fmtINR(r.earned)}*\n\n${paidRec?`✅ Paid on: ${fmtD(paidRec.date)} via ${paidRec.mode}`:'⏳ Payment Pending (1st–10th of month)'}\n\n— ${g.gymName||'GymPro'}, ${g.city||''}\n${g.phone?`📞 ${g.phone}`:''}`;
+  const ph=s.phone.startsWith('91')?s.phone:'91'+s.phone;
+  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(msg)}`,'_blank');
+}
+
+function sendSalaryReportWA(){
+  const mon=document.getElementById('sc-month')?.value||new Date().toISOString().slice(0,7);
+  const owner=DB.settings.waOwner;
+  if(!owner){alert('Set owner WhatsApp number in WhatsApp Center!');go('whatsapp');return;}
+  const g=DB.settings;
+  const results=DB.staff.map(s=>calcStaffSalary(s,mon));
+  const lines=results.map(r=>`• ${r.staff.name}: Present ${r.presentDays}d → *${fmtINR(r.earned)}* ${r.alreadyPaid?'✅ Paid':'⏳ Pending'}`).join('\n');
+  const total=results.reduce((s,r)=>s+r.earned,0);
+  const msg=`💵 *Salary Report — ${fmtM(mon)}*\n*${g.gymName||'GymPro'}*\n\n${lines}\n\n💰 *Total Payable: ${fmtINR(total)}*\n\nSalary Payment Window: 1st–10th of next month\n\n— GymPro Management System`;
+  const ph=owner.startsWith('91')?owner:'91'+owner;
+  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(msg)}`,'_blank');
+}
+
+async function markStaffAttTime(){
+  const staffId=document.getElementById('sc-staff')?.value;
+  const date=document.getElementById('sc-date')?.value||td();
+  const arrive=document.getElementById('sc-arrive')?.value||'';
+  let status=document.getElementById('sc-status')?.value||'present';
+  if(!staffId){showAl('sc-att-alert','err','❌ Select staff!');return;}
+  const s=DB.staff.find(x=>x.id==staffId);if(!s)return;
+  // Auto late detection
+  if(arrive&&s.shiftStart){
+    const [sh,sm]=s.shiftStart.split(':').map(Number);
+    const [ah,am]=arrive.split(':').map(Number);
+    const shiftMins=sh*60+sm;
+    const arriveMins=ah*60+am;
+    if(arriveMins>shiftMins+15){// >15 min late = half day
+      status='late';
+    }
+  }
+  const rec={id:staffId+'_'+date,staffId,date,status,arrivalTime:arrive||'',adminId:ADMIN_UID};
+  const idx=DB.staffAtt.findIndex(a=>a.staffId==staffId&&a.date===date);
+  if(idx>=0)DB.staffAtt[idx]=rec;else DB.staffAtt.push(rec);
+  await saveItem('staffAtt',rec);
+  const statusLabels={present:'✅ Present',late:'⏰ Late (Half Day)',half:'🌗 Half Day',absent:'❌ Absent',leave:'🏖 On Leave'};
+  showAl('sc-att-alert','ok',`${statusLabels[status]||status} marked for ${s.name} on ${fmtD(date)}`);
+  calcAllSalaries();
+}
+
+// ══════════════════════════════════════════
+// EXCEL / CSV IMPORT
+// ══════════════════════════════════════════
+let importRows=[];
+let importHeaders=[];
+
+function dlImportTemplate(){
+  const csv=`Name,Phone,Email,Gender,Blood Group,Plan,Expiry Date,Goal,Height (cm),Weight (kg),Trainer,Batch,Address
+Rahul Sharma,9876543210,,Male,B+,Monthly,2025-06-30,Weight Loss,175,80,Suresh Bhai,Morning,,
+Priya Patel,9876543211,,Female,O+,3 Months,2025-08-31,Muscle Gain,160,60,,Zumba Batch,,`;
+  const b=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='GymPro-Import-Template.csv';a.click();
+}
+
+function loadImportFile(inp){
+  const file=inp.files[0];if(!file)return;
+  document.getElementById('imp-file-info').textContent=`📂 File: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    parseImportCSV(text);
+  };
+  reader.readAsText(file);
+}
+
+function parseImportCSV(text){
+  const lines=text.trim().split('\n').filter(l=>l.trim());
+  if(lines.length<2){alert('File is empty or has no data!');return;}
+  // Parse CSV properly (handle quoted commas)
+  function parseRow(line){
+    const result=[];let cur='';let inQ=false;
+    for(const c of line){if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){result.push(cur.trim());cur='';}else cur+=c;}
+    result.push(cur.trim());return result;
+  }
+  importHeaders=parseRow(lines[0]);
+  importRows=lines.slice(1).map(l=>parseRow(l)).filter(r=>r.some(c=>c));
+  // Show column mapping
+  showImportMapping();
+}
+
+const IMPORT_FIELDS=[
+  {key:'name',label:'Name *',required:true},
+  {key:'phone',label:'Phone *',required:true},
+  {key:'email',label:'Email',required:false},
+  {key:'gender',label:'Gender',required:false},
+  {key:'blood',label:'Blood Group',required:false},
+  {key:'plan',label:'Plan Name',required:false},
+  {key:'expiry',label:'Expiry Date',required:false},
+  {key:'goal',label:'Goal',required:false},
+  {key:'height',label:'Height',required:false},
+  {key:'weight',label:'Weight',required:false},
+  {key:'trainerName',label:'Trainer',required:false},
+  {key:'batchName',label:'Batch',required:false},
+];
+
+function showImportMapping(){
+  const section=document.getElementById('imp-mapping-section');if(section)section.style.display='';
+  const grid=document.getElementById('imp-map-grid');if(!grid)return;
+  grid.innerHTML=IMPORT_FIELDS.map(f=>{
+    // Auto-match column
+    const autoMatch=importHeaders.findIndex(h=>h.toLowerCase().replace(/[^a-z]/g,'').includes(f.key.toLowerCase().replace(/[^a-z]/g,''))||h.toLowerCase().includes(f.label.toLowerCase().replace(' *','').split(' ')[0].toLowerCase()));
+    return`<div class="fg"><label>${f.label}</label>
+      <select id="imp-col-${f.key}">
+        <option value="">— Skip —</option>
+        ${importHeaders.map((h,i)=>`<option value="${i}" ${i===autoMatch?'selected':''}>${h}</option>`).join('')}
+      </select>
+    </div>`;
+  }).join('');
+  // Auto-preview
+  buildImportPreview();
+  // Watch changes
+  grid.querySelectorAll('select').forEach(s=>s.addEventListener('change',buildImportPreview));
+}
+
+function buildImportPreview(){
+  const mapping={};
+  IMPORT_FIELDS.forEach(f=>{
+    const sel=document.getElementById('imp-col-'+f.key);
+    if(sel&&sel.value!=='')mapping[f.key]=+sel.value;
+  });
+  const nameCol=mapping['name'];const phoneCol=mapping['phone'];
+  if(nameCol===undefined||phoneCol===undefined){
+    const section=document.getElementById('imp-preview-section');if(section)section.style.display='none';
+    return;
+  }
+  const preview=importRows.slice(0,50).map((row,i)=>{
+    const name=(row[nameCol]||'').trim();
+    const phone=(row[phoneCol]||'').replace(/\D/g,'').slice(-10);
+    const valid=name.length>1&&phone.length===10;
+    return{row,name,phone,valid,mapping,idx:i};
+  });
+  const valid=preview.filter(p=>p.valid);
+  const section=document.getElementById('imp-preview-section');if(section)section.style.display='';
+  const cntEl=document.getElementById('imp-valid-count');
+  if(cntEl)cntEl.textContent=`${valid.length} of ${importRows.length} valid`;
+  const tb=document.getElementById('imp-preview-tb');
+  if(tb)tb.innerHTML=preview.slice(0,20).map(p=>{
+    const planName=mapping['plan']!==undefined?p.row[mapping['plan']]||'—':'—';
+    const expiry=mapping['expiry']!==undefined?p.row[mapping['expiry']]||'—':'—';
+    return`<tr><td style="color:var(--text3)">${p.idx+1}</td>
+      <td><div style="font-weight:600">${p.name||'❌ Missing'}</div></td>
+      <td>${p.phone||'❌ Invalid'}</td>
+      <td style="font-size:12px">${planName}</td>
+      <td style="font-size:12px">${expiry}</td>
+      <td>${p.valid?'<span class="pill pg">✅ OK</span>':'<span class="pill pr">❌ Skip</span>'}</td>
+    </tr>`;
+  }).join('');
+  const action=document.getElementById('imp-action');if(action)action.style.display='';
+}
+
+async function doExcelImport(){
+  if(!requireAdmin('import members'))return;
+  const mapping={};
+  IMPORT_FIELDS.forEach(f=>{
+    const sel=document.getElementById('imp-col-'+f.key);
+    if(sel&&sel.value!=='')mapping[f.key]=+sel.value;
+  });
+  const nameCol=mapping['name'];const phoneCol=mapping['phone'];
+  if(nameCol===undefined||phoneCol===undefined){alert('Map Name and Phone columns first!');return;}
+  const validRows=importRows.filter(row=>{
+    const name=(row[nameCol]||'').trim();
+    const phone=(row[phoneCol]||'').replace(/\D/g,'').slice(-10);
+    return name.length>1&&phone.length===10;
+  });
+  if(!validRows.length){alert('No valid rows to import!');return;}
+  if(!confirm(`Import ${validRows.length} members? Existing members with same phone will be skipped.`))return;
+  const prog=document.getElementById('imp-progress');if(prog)prog.style.display='';
+  const bar=document.getElementById('imp-prog-bar');
+  const txt=document.getElementById('imp-prog-txt');
+  let done=0,skipped=0,errors=0;
+  const today=td();
+  for(const row of validRows){
+    const name=(row[nameCol]||'').trim();
+    const phone=(row[phoneCol]||'').replace(/\D/g,'').slice(-10);
+    // Skip duplicate phone
+    if(DB.members.find(m=>m.phone===phone)){skipped++;done++;continue;}
+    // Find plan by name
+    const planName=mapping['plan']!==undefined?(row[mapping['plan']]||'').trim():'';
+    const plan=DB.plans.find(p=>p.name.toLowerCase().includes(planName.toLowerCase()));
+    let expiry='';
+    if(mapping['expiry']!==undefined){
+      const rawExp=(row[mapping['expiry']]||'').trim();
+      if(rawExp){try{expiry=new Date(rawExp).toISOString().slice(0,10);}catch(e){expiry='';}}
+    }
+    const mem={
+      id:uid(),
+      name,phone,
+      email:mapping['email']!==undefined?row[mapping['email']]||'':'',
+      gender:mapping['gender']!==undefined?row[mapping['gender']]||'':'',
+      blood:mapping['blood']!==undefined?row[mapping['blood']]||'':'',
+      goal:mapping['goal']!==undefined?row[mapping['goal']]||'':'',
+      height:mapping['height']!==undefined?+row[mapping['height']]||0:0,
+      weight:mapping['weight']!==undefined?+row[mapping['weight']]||0:0,
+      trainerName:mapping['trainerName']!==undefined?row[mapping['trainerName']]||'':'',
+      batchName:mapping['batchName']!==undefined?row[mapping['batchName']]||'':'',
+      planId:plan?plan.id:'',
+      planName:plan?plan.name:planName,
+      joindate:today,
+      expiry,
+      importedFrom:'excel',
+      adminId:ADMIN_UID
+    };
+    try{
+      DB.members.push(mem);
+      await saveItem('members',mem);
+    }catch(e){errors++;DB.members.pop();}
+    done++;
+    const pct=Math.round((done/validRows.length)*100);
+    if(bar)bar.style.width=pct+'%';
+    if(txt)txt.textContent=`Importing ${done} of ${validRows.length}...`;
+  }
+  if(bar)bar.style.width='100%';
+  if(txt)txt.textContent='Import complete!';
+  updBadge();
+  const resultEl=document.getElementById('imp-result');
+  if(resultEl)resultEl.innerHTML=`<div class="alert" style="background:var(--green-lt);border:1px solid #bbf7d0;color:var(--green)">
+    ✅ <strong>Import Complete!</strong><br>
+    ${done-skipped-errors} members imported • ${skipped} skipped (duplicate phone) • ${errors} errors<br>
+    <br>Now go to <strong>Biometric</strong> page to enroll fingerprints for these members.
+    <button class="btn bb bsm" style="margin-top:8px" onclick="go('biometric')">🖐 Go to Biometric →</button>
+  </div>`;
+}
+
+
 <div id="toast-container"></div>
 </body>
 </html>
