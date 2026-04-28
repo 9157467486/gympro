@@ -10,6 +10,7 @@
 <title>GymPro Ultimate</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Clash+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <!-- Firebase v9 compat -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -381,8 +382,8 @@ tr:hover td{background:#fafbff}
     <div class="ns">Operations</div>
     <div class="ni" onclick="go('batches')"><div class="nico">📅</div>Batches & Classes</div>
     <div class="ni admin-only" onclick="go('staff')"><div class="nico">👨‍💼</div>Staff & Salary</div>
-    <div class="ni admin-only" onclick="go('salarycalc')" style="background:linear-gradient(135deg,rgba(5,150,105,.06),rgba(16,185,129,.06));border:1px solid rgba(5,150,105,.2)"><div class="nico" style="background:linear-gradient(135deg,#059669,#0d9488);color:#fff">💵</div><span style="color:#059669;font-weight:700">Salary Calc</span> <span style="font-size:10px;background:#059669;color:#fff;padding:1px 5px;border-radius:8px;margin-left:auto">NEW</span></div>
-    <div class="ni admin-only" onclick="go('import')" style="background:linear-gradient(135deg,rgba(234,88,12,.06),rgba(245,158,11,.06));border:1px solid rgba(234,88,12,.2)"><div class="nico" style="background:linear-gradient(135deg,#ea580c,#d97706);color:#fff">📥</div><span style="color:#ea580c;font-weight:700">Import Members</span> <span style="font-size:10px;background:#ea580c;color:#fff;padding:1px 5px;border-radius:8px;margin-left:auto">NEW</span></div>
+    <div class="ni admin-only" onclick="go('salarycalc')"><div class="nico" style="background:linear-gradient(135deg,#059669,#0d9488);color:#fff">💵</div>Salary Calculator</div>
+    <div class="ni admin-only" onclick="go('import')"><div class="nico" style="background:linear-gradient(135deg,#ea580c,#d97706);color:#fff">📥</div>Import Members</div>
     <div class="ns">Reports</div>
     <div class="ni admin-only" onclick="go('reports')"><div class="nico">📊</div>Reports</div>
     <div class="ni admin-only" onclick="go('monthly')"><div class="nico">📄</div>Monthly Report</div>
@@ -444,52 +445,58 @@ tr:hover td{background:#fafbff}
 <div class="page" id="pg-members">
   <div class="sr-row">
     <div class="si" style="flex:2"><input type="text" id="ms" placeholder="Search name, phone, email..." onkeydown="if(event.key==='Escape')this.value=''" aria-label="Search members" oninput="renderMembers()"></div>
-    <select id="mfs" onchange="renderMembers()" style="width:135px"><option value="">All Status</option><option value="active">Active</option><option value="expiring">Expiring</option><option value="expired">Expired</option><option value="unpaid">Unpaid</option></select>
+    <select id="mfs" onchange="renderMembers()" style="width:135px"><option value="">All Status</option><option value="active">✅ Active</option><option value="expiring">⚡ Expiring</option><option value="expired">❌ Expired</option><option value="unpaid">⚪ Never Paid</option></select>
     <select id="mfp" onchange="renderMembers()" style="width:135px"><option value="">All Plans</option></select>
     <button class="btn bb" onclick="go('addmember')">➕ Add Member</button>
     <button class="btn bo bsm" onclick="expMembersCSV()">📥 CSV</button>
   </div>
   <div class="sec"><div class="sh"><h3>All Members</h3><span class="pill pb" id="mcnt">0 members</span></div>
-    <div class="snp"><div class="tw"><table><thead><tr><th>Member</th><th>Phone</th><th>Plan</th><th>Trainer</th><th>Batch</th><th>Expiry</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead><tbody id="mtb"></tbody></table></div></div>
+    <div class="snp"><div class="tw"><table><thead><tr><th>Client Name</th><th>Contact No</th><th>Package Details</th><th>Package Validity</th><th>Trainer Name</th><th>Representative</th><th>Status</th><th>Created On</th><th>Client ID</th><th>Membership ID</th><th>Actions</th></tr></thead><tbody id="mtb"></tbody></table></div></div>
   </div>
 </div>
 
 <!-- ═══ ADD MEMBER ═══ -->
 <div class="page" id="pg-addmember">
   <div class="g2">
-    <div class="sec"><div class="sh"><h3>👤 Personal Info</h3></div>
+    <div class="sec"><div class="sh"><h3>👤 Member Info</h3></div>
       <div class="sb2">
         <div id="am-alert"></div>
         <div class="fgrid">
-          <div class="fg"><label>Full Name *</label><input type="text" id="amn" placeholder="e.g. Rahul Patel"></div>
-          <div class="fg"><label>Phone *</label><input type="tel" id="amp" placeholder="10-digit mobile number" maxlength="10" minlength="10" pattern="[0-9]{10}" inputmode="numeric"></div>
-          <div class="fg"><label>Email</label><input type="email" id="ame" placeholder="email@example.com"></div>
-          <div class="fg"><label>Date of Birth</label><input type="date" id="amd"></div>
-          <div class="fg"><label>Gender</label><select id="amg"><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
-          <div class="fg"><label>Blood Group</label><select id="amb"><option value="">Select</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>O+</option><option>O-</option><option>AB+</option><option>AB-</option></select></div>
-          <div class="fg"><label>Height (cm)</label><input type="number" id="amh" placeholder="e.g. 170"></div>
-          <div class="fg"><label>Weight (kg)</label><input type="number" id="amw" placeholder="e.g. 70"></div>
-          <div class="fg"><label>Fitness Goal</label><select id="amgo"><option value="">Select</option><option>Weight Loss</option><option>Muscle Gain</option><option>Endurance</option><option>Flexibility</option><option>General Fitness</option></select></div>
-          <div class="fg"><label>Emergency Contact</label><input type="text" id="amem" placeholder="Name & number"></div>
-          <div class="fg"><label>Photo</label><input type="file" id="amph" accept="image/*" onchange="prevPh(this,'am-prev')"></div>
+          <div class="fg"><label>Client Name *</label><input type="text" id="amn" placeholder="e.g. Rahul Patel"></div>
+          <div class="fg"><label>Contact No *</label><input type="tel" id="amp" placeholder="10-digit mobile number" maxlength="10" minlength="10" pattern="[0-9]{10}" inputmode="numeric"></div>
+          <div class="fg"><label>Representative</label><input type="text" id="amrep" placeholder="Referred by / Source"></div>
+          <div class="fg"><label>Status Note</label><select id="amso"><option value="">— Select —</option><option>Walk-in</option><option>Friend Referral</option><option>Social Media</option><option>Online Ad</option><option>Staff Referral</option></select></div>
+          <div class="fg"><label>Photo <span style="color:var(--text3);font-weight:400">(optional)</span></label><input type="file" id="amph" accept="image/*" onchange="prevPh(this,'am-prev')"></div>
           <div class="fg" style="align-items:center;justify-content:center"><img id="am-prev" src="" alt="Member photo preview" style="width:70px;height:70px;border-radius:50%;object-fit:cover;display:none;border:2px solid var(--blue)"></div>
-          <div class="fg full"><label>Address</label><input type="text" id="amad" placeholder="Full address"></div>
-          <div class="fg full"><label>Notes</label><textarea id="amno" rows="2" placeholder="Special notes..."></textarea></div>
         </div>
+        <details style="margin-top:12px">
+          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:6px 0;user-select:none">➕ Optional Personal Details</summary>
+          <div class="fgrid" style="margin-top:10px">
+            <div class="fg"><label>Email</label><input type="email" id="ame" placeholder="email@example.com"></div>
+            <div class="fg"><label>Date of Birth</label><input type="date" id="amd"></div>
+            <div class="fg"><label>Gender</label><select id="amg"><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+            <div class="fg"><label>Blood Group</label><select id="amb"><option value="">Select</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>O+</option><option>O-</option><option>AB+</option><option>AB-</option></select></div>
+            <div class="fg"><label>Height (cm)</label><input type="number" id="amh" placeholder="e.g. 170"></div>
+            <div class="fg"><label>Weight (kg)</label><input type="number" id="amw" placeholder="e.g. 70"></div>
+            <div class="fg"><label>Fitness Goal</label><select id="amgo"><option value="">Select</option><option>Weight Loss</option><option>Muscle Gain</option><option>Endurance</option><option>Flexibility</option><option>General Fitness</option></select></div>
+            <div class="fg"><label>Emergency Contact</label><input type="text" id="amem" placeholder="Name & number"></div>
+            <div class="fg full"><label>Address</label><input type="text" id="amad" placeholder="Full address"></div>
+            <div class="fg full"><label>Notes</label><textarea id="amno" rows="2" placeholder="Special notes..."></textarea></div>
+          </div>
+        </details>
       </div>
     </div>
     <div>
       <div class="sec" style="margin-bottom:16px"><div class="sh"><h3>💳 Membership</h3></div>
         <div class="sb2">
           <div class="fgrid">
-            <div class="fg"><label>Plan *</label><select id="ampl" onchange="ampc()"><option value="">Select plan</option></select></div>
+            <div class="fg"><label>Package *</label><select id="ampl" onchange="ampc()"><option value="">Select plan</option></select></div>
             <div class="fg"><label>Join Date *</label><input type="date" id="amj"></div>
             <div class="fg"><label>Fee (₹) *</label><input type="number" id="amf" placeholder="Auto-filled"></div>
             <div class="fg"><label>Amount Paid (₹)</label><input type="number" id="ampa" placeholder="Full or partial"></div>
             <div class="fg"><label>Payment Mode</label><select id="amm"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option></select></div>
             <div class="fg"><label>Trainer</label><select id="amtr"><option value="">No Trainer</option></select></div>
             <div class="fg"><label>Batch</label><select id="ambt"><option value="">No Batch</option></select></div>
-            <div class="fg"><label>Source</label><select id="amso"><option>Walk-in</option><option>Friend Referral</option><option>Social Media</option><option>Online Ad</option></select></div>
           </div>
           <div class="dvd"></div>
           <div style="display:flex;gap:9px;flex-wrap:wrap">
@@ -902,11 +909,8 @@ tr:hover td{background:#fafbff}
   </div>
 </div>
 
-  </div><!-- content -->
-</div><!-- main -->
-
 <!-- ═══ SALARY CALCULATOR PAGE ═══ -->
-<div class="page" id="pg-salarycalc" style="display:none">
+<div class="page" id="pg-salarycalc">
   <div class="sec" style="margin-bottom:16px">
     <div class="sh"><h3>💵 Monthly Salary Calculator</h3>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -920,8 +924,8 @@ tr:hover td{background:#fafbff}
         ⚙️ <strong>Salary Rule:</strong> Present = Full Day | Half Day / Late = 0.5 Day | Absent = 0 Day. 
         Salary between 1st–10th of month. Staff arriving after shift start time counts as <strong>Half Day</strong>.
       </div>
-      <div id="sc-table-wrap">
-        <div class="emp"><div class="ei">💵</div><p>Select a month and click Calculate</p></div>
+      <div id="sc-table-wrap" class="snp">
+        <div class="tw"><div class="emp" style="padding:32px"><div class="ei">💵</div><p>Select a month and click Calculate</p></div></div>
       </div>
     </div>
   </div>
@@ -931,7 +935,7 @@ tr:hover td{background:#fafbff}
       <div class="fgrid">
         <div class="fg"><label>Staff *</label><select id="sc-staff"><option value="">Select Staff</option></select></div>
         <div class="fg"><label>Date *</label><input type="date" id="sc-date"></div>
-        <div class="fg"><label>Arrival Time</label><input type="time" id="sc-arrive" placeholder="e.g. 06:15"></div>
+        <div class="fg"><label>Arrival Time</label><input type="time" id="sc-arrive"></div>
         <div class="fg"><label>Status</label><select id="sc-status"><option value="present">✅ Present (on time)</option><option value="late">⏰ Late (auto half-day)</option><option value="half">🌗 Half Day</option><option value="absent">❌ Absent</option><option value="leave">🏖 On Leave</option></select></div>
       </div>
       <button class="btn bb" style="margin-top:10px" onclick="markStaffAttTime()">✅ Mark Attendance</button>
@@ -940,42 +944,38 @@ tr:hover td{background:#fafbff}
   </div>
 </div>
 
-<!-- ═══ EXCEL / CSV IMPORT PAGE ═══ -->
-<div class="page" id="pg-import" style="display:none">
+<!-- ═══ IMPORT MEMBERS PAGE ═══ -->
+<div class="page" id="pg-import">
   <div class="sec" style="margin-bottom:16px">
-    <div class="sh"><h3>📥 Import Members from Excel / CSV</h3></div>
+    <div class="sh"><h3>📥 Import Members from Excel / CSV / XLSX</h3></div>
     <div class="sb2">
       <div class="alert" style="background:#eff4ff;border:1px solid var(--blue-soft);color:var(--blue);margin-bottom:16px">
-        💡 <strong>Coming from old software?</strong> Export your members to Excel/CSV and upload here. All active members will be imported instantly — just enroll biometrics and they're ready!
+        💡 <strong>Coming from old software?</strong> Upload your Excel (.xlsx) or CSV file with all active members. They will be imported instantly — then just enroll biometrics!
       </div>
-
       <!-- Step 1 -->
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:12px">
         <div style="font-weight:700;color:var(--blue);margin-bottom:8px">📋 Step 1 — Download Template</div>
-        <p style="font-size:13px;color:var(--text2);margin-bottom:10px">Download our Excel template and fill in your members, or map your existing columns in Step 3.</p>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:10px">Download template, fill member data, then upload below. Or just upload your existing Excel file and map columns.</p>
         <button class="btn bb bsm" onclick="dlImportTemplate()">📥 Download Template (CSV)</button>
       </div>
-
       <!-- Step 2 -->
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:12px">
         <div style="font-weight:700;color:var(--blue);margin-bottom:8px">📂 Step 2 — Upload Your File</div>
-        <div style="border:2px dashed var(--border2);border-radius:var(--r2);padding:28px;text-align:center;cursor:pointer;background:#fff" onclick="document.getElementById('imp-excel').click()">
+        <div id="imp-drop-zone" style="border:2px dashed var(--border2);border-radius:var(--r2);padding:28px;text-align:center;cursor:pointer;background:#fff;transition:border-color .2s" onclick="document.getElementById('imp-excel').click()" ondragover="event.preventDefault();this.style.borderColor='var(--blue)'" ondragleave="this.style.borderColor='var(--border2)'" ondrop="handleImpDrop(event)">
           <div style="font-size:36px;margin-bottom:8px">📊</div>
-          <div style="font-weight:700;color:var(--text2)">Click to upload CSV / Excel file</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">Supports .csv and .xlsx files</div>
+          <div style="font-weight:700;color:var(--text2)">Click to upload or Drag & Drop</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:6px">✅ Supports <strong>.xlsx</strong> (Excel) and <strong>.csv</strong> files</div>
         </div>
         <input type="file" id="imp-excel" accept=".csv,.xlsx,.xls" style="display:none" onchange="loadImportFile(this)">
         <div id="imp-file-info" style="margin-top:8px;font-size:12px;color:var(--text3)"></div>
       </div>
-
       <!-- Step 3 -->
       <div id="imp-mapping-section" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:12px">
         <div style="font-weight:700;color:var(--blue);margin-bottom:8px">🗂 Step 3 — Map Columns</div>
-        <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Match your file's columns to GymPro fields:</p>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Match your file columns to GymPro fields:</p>
         <div class="fgrid" id="imp-map-grid"></div>
       </div>
-
-      <!-- Step 4 - Preview -->
+      <!-- Step 4 -->
       <div id="imp-preview-section" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div style="font-weight:700;color:var(--blue)">👁 Step 4 — Preview</div>
@@ -986,8 +986,6 @@ tr:hover td{background:#fafbff}
           <tbody id="imp-preview-tb"></tbody></table>
         </div>
       </div>
-
-      <!-- Import Button -->
       <div id="imp-action" style="display:none">
         <button class="btn bg" style="width:100%;padding:14px;font-size:15px" onclick="doExcelImport()">🚀 Import All Members to GymPro</button>
         <div id="imp-progress" style="margin-top:12px;display:none">
@@ -995,37 +993,33 @@ tr:hover td{background:#fafbff}
           <div id="imp-prog-txt" style="font-size:12px;color:var(--text3);text-align:center">Importing...</div>
         </div>
       </div>
-
       <div id="imp-result" style="margin-top:12px"></div>
     </div>
   </div>
-
-  <!-- Existing member list reminder -->
   <div class="sec">
-    <div class="sh"><h3>ℹ️ After Import — Next Steps</h3></div>
+    <div class="sh"><h3>🖐 After Import — Biometric Setup for Active Members</h3></div>
     <div class="sb2">
-      <div class="g3" style="gap:12px">
-        <div class="hb-g hb" style="text-align:center">
-          <div style="font-size:28px;margin-bottom:6px">1️⃣</div>
-          <div style="font-weight:700;font-size:13px">Import Members</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">Upload Excel, map columns, import</div>
-        </div>
-        <div class="hb-b hb" style="text-align:center">
-          <div style="font-size:28px;margin-bottom:6px">2️⃣</div>
-          <div style="font-weight:700;font-size:13px">Enroll Biometrics</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">Go to Biometric → Enroll each member's finger</div>
-        </div>
-        <div class="hb hb-o" style="text-align:center">
-          <div style="font-size:28px;margin-bottom:6px">3️⃣</div>
-          <div style="font-weight:700;font-size:13px">Ready to Use!</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">Members scan finger, attendance auto-marks</div>
-        </div>
+      <div class="g3" style="gap:12px;margin-bottom:14px">
+        <div class="hb hb-g" style="text-align:center"><div style="font-size:28px;margin-bottom:6px">1️⃣</div><div style="font-weight:700;font-size:13px">Import Done</div><div style="font-size:12px;color:var(--text3);margin-top:4px">All 115+ members imported from your Excel</div></div>
+        <div class="hb hb-b" style="text-align:center"><div style="font-size:28px;margin-bottom:6px">2️⃣</div><div style="font-weight:700;font-size:13px">Enroll Fingerprint</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Biometric page → select member → scan finger</div></div>
+        <div class="hb hb-o" style="text-align:center"><div style="font-size:28px;margin-bottom:6px">3️⃣</div><div style="font-weight:700;font-size:13px">Daily Scan</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Members scan finger → attendance auto-marks ✅</div></div>
+      </div>
+      <div class="alert awarn">
+        🖐 <strong>How to enroll each active member:</strong><br><br>
+        1. Click <strong>"Biometric Attendance"</strong> in sidebar<br>
+        2. Click <strong>"Enroll Fingerprint"</strong> button<br>
+        3. Select the member's name from dropdown<br>
+        4. Ask member to place finger on biometric device<br>
+        5. Scan is saved — member is ready!<br><br>
+        Repeat for all 115+ active members. Once enrolled, they just scan their finger every day and attendance is automatically recorded.
+        <div style="margin-top:10px"><button class="btn bb bsm" onclick="go('biometric')">🖐 Go to Biometric Page →</button></div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ═══ MODALS ═══ -->
+  </div><!-- content -->
+</div><!-- main -->
 <div class="mo" id="rcpt-mo"><div class="md"><div class="mh"><h3>🧾 Payment Receipt</h3><div class="cx" onclick="closeM('rcpt-mo')">✕</div></div><div class="mb"><div id="rcpt-html"></div></div><div class="mf"><button class="btn bw" onclick="waFromRcpt()">📱 WhatsApp</button><button class="btn bo" onclick="printRcpt()">🖨 Print</button><button class="btn bgh" onclick="closeM('rcpt-mo')">Close</button></div></div></div>
 <div class="mo" id="mem-mo"><div class="md md-lg"><div class="mh"><h3>👤 Member Profile</h3><div class="cx" onclick="closeM('mem-mo')">✕</div></div><div class="mb" id="mem-mo-body"></div><div class="mf"><button class="btn bb" onclick="goCollect()">💰 Collect Fee</button><button class="btn bw" onclick="waViewed()">📱 WhatsApp</button><button class="btn bo" onclick="showMemberCard(viewedId)">🪪 ID Card</button><button class="btn bgh" onclick="closeM('mem-mo')">Close</button></div></div></div>
 <div class="mo" id="plan-mo"><div class="md"><div class="mh"><h3>📋 Membership Plan</h3><div class="cx" onclick="closeM('plan-mo')">✕</div></div><div class="mb"><div class="fgrid"><div class="fg"><label>Name *</label><input type="text" id="pmn" placeholder="e.g. Monthly"></div><div class="fg"><label>Days *</label><input type="number" id="pmd" placeholder="e.g. 30"></div><div class="fg"><label>Price (₹) *</label><input type="number" id="pmp" placeholder="e.g. 1200"></div><div class="fg"><label>Description</label><input type="text" id="pmds" placeholder="Short desc"></div></div></div><div class="mf"><button class="btn bb" onclick="savePlan()">💾 Save</button><button class="btn bgh" onclick="closeM('plan-mo')">Cancel</button></div></div></div>
@@ -1685,7 +1679,7 @@ function renderPlans(){const el=document.getElementById('plans-list');if(!el)ret
 // ADD MEMBER
 // ══════════════════════════════════════════
 function ampc(){const p=DB.plans.find(x=>x.id===document.getElementById('ampl').value);if(p){document.getElementById('amf').value=p.price;document.getElementById('ampa').value=p.price;}}
-function clearAM(){['amn','amp','ame','amd','amad','amno','amf','ampa','amh','amw','amem'].forEach(id=>document.getElementById(id).value='');['amg','amb','amgo','amso'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('ampl').value='';document.getElementById('amtr').value='';document.getElementById('ambt').value='';document.getElementById('amj').valueAsDate=new Date();document.getElementById('am-prev').style.display='none';document.getElementById('am-alert').innerHTML='';}
+function clearAM(){['amn','amp','ame','amd','amad','amno','amf','ampa','amh','amw','amem','amrep'].forEach(id=>document.getElementById(id)&&(document.getElementById(id).value=''));['amg','amb','amgo','amso'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('ampl').value='';document.getElementById('amtr').value='';document.getElementById('ambt').value='';document.getElementById('amj').valueAsDate=new Date();document.getElementById('am-prev').style.display='none';document.getElementById('am-alert').innerHTML='';}
 async function addMember(wa=false){
   const rawName=document.getElementById('amn').value.trim(),name=rawName.slice(0,80),phone=document.getElementById('amp').value.trim().replace(/\D/g,''),planId=document.getElementById('ampl').value,join=document.getElementById('amj').value;
   if(!name||!phone){showAl('am-alert','err','❌ Name and phone required!');return;}
@@ -1699,7 +1693,9 @@ async function addMember(wa=false){
   const trainer=DB.staff.find(s=>s.id===+document.getElementById('amtr').value);
   const batch=DB.batches.find(b=>b.id===+document.getElementById('ambt').value);
   const mId = uid();
-  const m={id:mId,name,phone,email:document.getElementById('ame').value,dob:document.getElementById('amd').value,gender:document.getElementById('amg').value,blood:document.getElementById('amb').value,height:document.getElementById('amh').value,weight:document.getElementById('amw').value,emergency:document.getElementById('amem').value,goal:document.getElementById('amgo').value,address:document.getElementById('amad').value,notes:document.getElementById('amno').value,source:document.getElementById('amso')?.value||'',photo:getPh('am-prev'),planId,joindate:join,expiry,trainerId:trainer?trainer.id:null,trainerName:trainer?trainer.name:'',batchId:batch?batch.id:null,batchName:batch?batch.name:'',createdAt:new Date().toISOString()};
+  const clientId = 'CLT-' + String(DB.nid.m).padStart(4,'0');
+  const membershipId = 'MEM-' + String(DB.nid.m).padStart(6,'0');
+  const m={id:mId,clientId,membershipId,name,phone,email:document.getElementById('ame').value,dob:document.getElementById('amd').value,gender:document.getElementById('amg').value,blood:document.getElementById('amb').value,height:document.getElementById('amh').value,weight:document.getElementById('amw').value,emergency:document.getElementById('amem').value,goal:document.getElementById('amgo').value,address:document.getElementById('amad').value,notes:document.getElementById('amno').value,source:document.getElementById('amso')?.value||'',representative:document.getElementById('amrep')?.value?.trim()||'',photo:getPh('am-prev'),planId,joindate:join,expiry,trainerId:trainer?trainer.id:null,trainerName:trainer?trainer.name:'',batchId:batch?batch.id:null,batchName:batch?batch.name:'',createdAt:new Date().toISOString()};
   const pId = uid();
   const pay={id:pId,memberId:mId,memberName:name,phone,planId,planName:plan.name,fee,paid,balance:Math.max(0,fee-paid),mode:document.getElementById('amm').value,date:join,newExpiry:expiry,notes:'New member',receiptNo:'REC-'+String(DB.nid.p).padStart(5,'0')};
   DB.nid.m++; DB.nid.p++;
@@ -1813,37 +1809,48 @@ function renderMembers(){
   if(fp)list=list.filter(m=>m.planId===fp);
   document.getElementById('mcnt').textContent=list.length+' members';
   const tb=document.getElementById('mtb');
-  if(!list.length){tb.innerHTML=`<tr><td colspan="9"><div class="emp"><div class="ei">👥</div><p>No members found.</p></div></td></tr>`;return;}
-  tb.innerHTML=list.map(m=>{const plan=DB.plans.find(p=>p.id===m.planId);const lp=DB.payments.filter(p=>p.memberId==m.id).slice(-1)[0];const bal=lp?lp.balance:0;return`<tr>
-    <td><div style="display:flex;align-items:center;gap:9px">${m.photo?`<div class="av av-sm" style="border:1.5px solid var(--blue)"><img src="${m.photo}"></div>`:av(m.name,'sm')}<div><div style="font-weight:700">${m.name}</div><div style="font-size:11px;color:var(--text3)">${m.gender||''}${m.blood?' • '+m.blood:''}</div></div></div></td>
+  if(!list.length){tb.innerHTML=`<tr><td colspan="11"><div class="emp"><div class="ei">👥</div><p>No members found.</p></div></td></tr>`;return;}
+  tb.innerHTML=list.map(m=>{
+    const plan=DB.plans.find(p=>p.id===m.planId);
+    const clientId=m.clientId||('CLT-'+String(m.id).slice(-6));
+    const membershipId=m.membershipId||('MEM-'+String(m.id).slice(-8));
+    const createdOn=m.createdAt?fmtD(m.createdAt.split('T')[0]):(m.joindate?fmtD(m.joindate):'—');
+    return`<tr>
+    <td><div style="display:flex;align-items:center;gap:9px">${m.photo?`<div class="av av-sm" style="border:1.5px solid var(--blue)"><img src="${m.photo}"></div>`:av(m.name,'sm')}<div><div style="font-weight:700">${escHtml(m.name)}</div></div></div></td>
     <td><a href="tel:${m.phone}" style="color:var(--blue);text-decoration:none;font-weight:600">${m.phone}</a></td>
-    <td>${plan?`<span class="pill pb">${plan.name}</span>`:'—'}</td>
-    <td>${m.trainerName||'—'}</td><td>${m.batchName||'—'}</td>
-    <td style="font-size:12px">${fmtD(m.expiry)}</td>
-    <td>${bal>0?`<span class="pill pr">${fmtINR(bal)}</span>`:'<span class="pill pg">Clear</span>'}</td>
+    <td>${plan?`<span class="pill pb">${escHtml(plan.name)}</span>`:'—'}</td>
+    <td style="font-size:12px;white-space:nowrap">${fmtD(m.expiry)}</td>
+    <td style="font-size:12px">${escHtml(m.trainerName||'—')}</td>
+    <td style="font-size:12px">${escHtml(m.representative||m.source||'—')}</td>
     <td>${stPill(getSt(m))}</td>
+    <td style="font-size:12px;white-space:nowrap;color:var(--text3)">${createdOn}</td>
+    <td><span class="pill pb" style="font-size:10px;font-family:monospace">${escHtml(clientId)}</span></td>
+    <td><span class="pill pt" style="font-size:10px;font-family:monospace">${escHtml(membershipId)}</span></td>
     <td><div class="tda"><button class="btn bgh bxs" onclick="viewMember('${m.id}')">👁</button><button class="btn bw bxs" onclick="sendWAR('${m.id}')">📱</button><button class="btn bb bxs" onclick="qFee('${m.id}')">💰</button>${CURRENT_ROLE==='admin'?`<button class="btn br bxs" onclick="delMem('${m.id}')">🗑</button>`:''}</div></td>
-  </tr>`}).join('');
+  </tr>`;}).join('');
 }
 function viewMember(id){
   viewedId=id;const m=DB.members.find(x=>x.id==id);const plan=DB.plans.find(p=>p.id===m.planId);const pays=DB.payments.filter(p=>p.memberId==id);const total=pays.reduce((s,p)=>s+p.paid,0);const attRec=DB.memberAtt.filter(a=>a.memberId==id&&a.status==='present').length;
+  const clientId=m.clientId||('CLT-'+String(m.id).slice(-6));
+  const membershipId=m.membershipId||('MEM-'+String(m.id).slice(-8));
+  const createdOn=m.createdAt?fmtD(m.createdAt.split('T')[0]):(m.joindate?fmtD(m.joindate):'—');
   document.getElementById('mem-mo-body').innerHTML=`
     <div style="display:flex;gap:15px;align-items:flex-start;margin-bottom:16px">
       <div>${m.photo?`<div class="av av-lg" style="border:2px solid var(--blue)"><img src="${m.photo}"></div>`:av(m.name,'lg')}</div>
-      <div style="flex:1"><div style="font-family:'Clash Display',sans-serif;font-size:21px;font-weight:700">${m.name}</div>
+      <div style="flex:1"><div style="font-family:'Clash Display',sans-serif;font-size:21px;font-weight:700">${escHtml(m.name)}</div>
         <div style="font-size:12px;color:var(--text3);margin-top:2px">Joined ${fmtD(m.joindate)}</div>
-        <div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">${stPill(getSt(m))}${plan?`<span class="pill pb">${plan.name}</span>`:''}${m.goal?`<span class="pill pt">${m.goal}</span>`:''}</div>
+        <div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">${stPill(getSt(m))}${plan?`<span class="pill pb">${escHtml(plan.name)}</span>`:''}${m.goal?`<span class="pill pt">${escHtml(m.goal)}</span>`:''}</div>
       </div>
     </div>
     <div class="g3" style="margin-bottom:14px">
-      ${[['Phone',m.phone],['Email',m.email||'—'],['Gender',m.gender||'—'],['Blood',m.blood||'—'],['Height',m.height?m.height+' cm':'—'],['Weight',m.weight?m.weight+' kg':'—'],['Expiry',fmtD(m.expiry)],['Trainer',m.trainerName||'None'],['Batch',m.batchName||'None']].map(([l,v])=>`<div class="hb"><div class="il">${l}</div><div style="font-weight:600;font-size:13px">${v}</div></div>`).join('')}
+      ${[['Client ID',clientId],['Membership ID',membershipId],['Phone',m.phone],['Package',plan?plan.name:'—'],['Package Validity',fmtD(m.expiry)],['Trainer',m.trainerName||'None'],['Representative',m.representative||m.source||'—'],['Created On',createdOn],['Status',getSt(m).charAt(0).toUpperCase()+getSt(m).slice(1)]].map(([l,v])=>`<div class="hb"><div class="il">${l}</div><div style="font-weight:600;font-size:13px">${escHtml(String(v))}</div></div>`).join('')}
     </div>
     <div class="g3" style="margin-bottom:14px">
       <div class="hb-b hb" style="text-align:center"><div class="il">Total Paid</div><div style="font-family:'Clash Display',sans-serif;font-size:22px;font-weight:700;color:var(--green)">${fmtINR(total)}</div></div>
       <div class="hb-b hb" style="text-align:center"><div class="il">Payments</div><div style="font-family:'Clash Display',sans-serif;font-size:22px;font-weight:700;color:var(--blue)">${pays.length}</div></div>
       <div class="hb-b hb" style="text-align:center"><div class="il">Attendance</div><div style="font-family:'Clash Display',sans-serif;font-size:22px;font-weight:700;color:var(--teal)">${attRec}d</div></div>
     </div>
-    ${pays.length?`<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Recent Payments</div><div class="tw"><table><thead><tr><th>Receipt</th><th>Amount</th><th>Date</th><th>Expiry</th></tr></thead><tbody>${pays.slice(-5).reverse().map(p=>`<tr><td>${p.receiptNo}</td><td style="color:var(--green);font-weight:700">${fmtINR(p.paid)}</td><td>${fmtD(p.date)}</td><td>${fmtD(p.newExpiry)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
+    ${pays.length?`<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Recent Payments</div><div class="tw"><table><thead><tr><th>Receipt</th><th>Amount</th><th>Date</th><th>Expiry</th></tr></thead><tbody>${pays.slice(-5).reverse().map(p=>`<tr><td>${escHtml(p.receiptNo)}</td><td style="color:var(--green);font-weight:700">${fmtINR(p.paid)}</td><td>${fmtD(p.date)}</td><td>${fmtD(p.newExpiry)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
   openM('mem-mo');
 }
 function goCollect(){closeM('mem-mo');if(viewedId)qFee(viewedId);}
@@ -2057,19 +2064,22 @@ function swStaff(tab, el){
 }
 async function saveStaff(){
   if(!requireAdmin('add staff'))return;
-  const n=document.getElementById('sfn').value.trim();if(!n){alert('Enter name!');return;}
+  const n=document.getElementById('sfn').value.trim();if(!n){alert('Enter staff name!');return;}
+  const phone=document.getElementById('sfp').value.trim();
+  if(phone&&!/^\d{10}$/.test(phone)){alert('Enter valid 10-digit phone number!');return;}
   const editId=document.getElementById('sf-edit-id').value;
   const s={
-    id:editId||uid(),
+    id:editId||String(uid()),
     name:n,
     role:document.getElementById('sfr').value,
-    phone:document.getElementById('sfp').value.trim(),
+    phone,
     salary:+document.getElementById('sfs').value||0,
     joinDate:document.getElementById('sfj').value,
     specialization:document.getElementById('sfsp').value.trim(),
     shiftStart:document.getElementById('sf-shift-start').value||'06:00',
     shiftEnd:document.getElementById('sf-shift-end').value||'14:00',
-    photo:sfPhotoData||''
+    photo:sfPhotoData||'',
+    adminId:ADMIN_UID
   };
   if(editId){
     const idx=DB.staff.findIndex(x=>x.id==editId);
@@ -2078,7 +2088,10 @@ async function saveStaff(){
     DB.staff.push(s);
   }
   await saveItem('staff',s);
-  popTrainers();popStaff();renderStaffGrid();closeM('staff-mo');
+  popTrainers();popStaff();renderStaffGrid();
+  // refresh salary calc if open
+  if(document.getElementById('pg-salarycalc')?.classList.contains('active'))initSalaryCalcPage();
+  closeM('staff-mo');
   sfPhotoData=null;
 }
 async function delStaff(id){if(!requireAdmin('delete staff'))return;if(!confirm('Delete?'))return;DB.staff=DB.staff.filter(s=>s.id!=id);await deleteItem('staff',id);popTrainers();popStaff();renderStaffGrid();}
@@ -2418,16 +2431,9 @@ function go(name){
   // Staff access control
   const adminPages=['reports','monthly','settings','staff','salarycalc','import'];
   if(adminPages.includes(name)&&CURRENT_ROLE!=='admin'){alert('🔒 Admin only section!');return;}
-  document.querySelectorAll('.page').forEach(p=>{p.classList.remove('active');});
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
-  // Handle new pages that use display:none instead of .page class
-  const newPages=['salarycalc','import'];
-  if(newPages.includes(name)){
-    const pg=document.getElementById('pg-'+name);
-    if(pg){pg.style.display='';pg.classList.add('active');}
-  } else {
-    const pg=document.getElementById('pg-'+name);if(pg)pg.classList.add('active');
-  }
+  const pg=document.getElementById('pg-'+name);if(pg)pg.classList.add('active');
   document.getElementById('pgtitle').textContent=TITLES[name]||name;
   document.querySelectorAll('.ni').forEach(n=>{if((n.getAttribute('onclick')||'').includes("'"+name+"'"))n.classList.add('active');});
   const rf={dashboard:renderDashboard,members:renderMembers,history:renderHist,reports:renderReports||genReport,expiry:()=>renderExpiry(curExpTab),attendance:()=>{renderAtt();renderAttToday();},batches:renderBatches,diet:()=>{renderDietPreview(curDietTab);renderDietTable();},biometric:initBioPage,salarycalc:initSalaryCalcPage};
@@ -3058,12 +3064,16 @@ function showToast(msg, type='ok', dur=3500){
 // ══════════════════════════════════════════
 function initSalaryCalcPage(){
   const monthEl=document.getElementById('sc-month');
-  if(monthEl&&!monthEl.value)monthEl.value=new Date().toISOString().slice(0,7);
-  // populate staff dropdown
+  if(monthEl)monthEl.value=new Date().toISOString().slice(0,7);
+  // populate staff attendance dropdown
   const sel=document.getElementById('sc-staff');
-  if(sel){sel.innerHTML='<option value="">Select Staff</option>'+DB.staff.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');}
+  if(sel){
+    sel.innerHTML='<option value="">Select Staff</option>'+DB.staff.map(s=>`<option value="${s.id}">${s.name} — ${s.role}</option>`).join('');
+  }
   // set today's date
-  const dateEl=document.getElementById('sc-date');if(dateEl)dateEl.valueAsDate=new Date();
+  const dateEl=document.getElementById('sc-date');
+  if(dateEl)dateEl.valueAsDate=new Date();
+  // auto calculate
   calcAllSalaries();
 }
 
@@ -3083,24 +3093,25 @@ function getWorkingDaysInMonth(yearMonth){
 }
 
 function calcStaffSalary(staff, yearMonth){
-  const totalDays=getWorkingDaysInMonth(yearMonth);
+  const totalDays=getWorkingDaysInMonth(yearMonth)||30;
+  const salary=+staff.salary||0;
   // Get attendance records for this staff this month
-  const attRecs=DB.staffAtt.filter(a=>a.staffId==staff.id&&a.date.startsWith(yearMonth));
+  const attRecs=DB.staffAtt.filter(a=>a.staffId==staff.id&&(a.date||'').startsWith(yearMonth));
   let presentDays=0;
   attRecs.forEach(a=>{
     if(a.status==='present'||a.status==='present-ontime')presentDays+=1;
     else if(a.status==='late'||a.status==='half')presentDays+=0.5;
-    else if(a.status==='leave')presentDays+=0.5; // leave = half day for salary
+    else if(a.status==='leave')presentDays+=0.5;
     // absent = 0
   });
-  const perDay=staff.salary/totalDays;
-  const earned=Math.round(perDay*presentDays);
-  const deduction=staff.salary-earned;
+  const perDay=salary/totalDays;
+  const earned=salary>0?Math.round(perDay*presentDays):0;
+  const deduction=salary-earned;
   // Is salary due? (between 1-10 of NEXT month)
   const today=new Date();
   const [ym,mm]=yearMonth.split('-').map(Number);
-  const nextMonth=new Date(ym,mm,1); // 1st of next month
-  const payWindowEnd=new Date(ym,mm,10); // 10th of next month
+  const nextMonth=new Date(ym,mm,1);
+  const payWindowEnd=new Date(ym,mm,10);
   const salaryDue=today>=nextMonth&&today<=payWindowEnd;
   const alreadyPaid=DB.salaries.some(s=>s.staffId==staff.id&&s.month===yearMonth);
   return{staff,yearMonth,totalDays,presentDays,earned,deduction,salaryDue,alreadyPaid,attRecs};
@@ -3194,11 +3205,11 @@ async function markStaffAttTime(){
   const date=document.getElementById('sc-date')?.value||td();
   const arrive=document.getElementById('sc-arrive')?.value||'';
   let status=document.getElementById('sc-status')?.value||'present';
-  if(!staffId){showAl('sc-att-alert','err','❌ Select staff!');return;}
+  if(!staffId){showAl('sc-att-alert','err','❌ Select staff first!');return;}
   const s=DB.staff.find(x=>x.id==staffId);if(!s)return;
-  // Auto late detection
+  // Auto late detection if arrival time entered
   if(arrive&&s.shiftStart){
-    const [sh,sm]=s.shiftStart.split(':').map(Number);
+    const [sh,sm]=(s.shiftStart||'06:00').split(':').map(Number);
     const [ah,am]=arrive.split(':').map(Number);
     const shiftMins=sh*60+sm;
     const arriveMins=ah*60+am;
@@ -3206,13 +3217,25 @@ async function markStaffAttTime(){
       status='late';
     }
   }
-  const rec={id:staffId+'_'+date,staffId,date,status,arrivalTime:arrive||'',adminId:ADMIN_UID};
+  const rec={
+    id:staffId+'_'+date,
+    staffId,
+    staffName:s.name,
+    date,
+    status,
+    arrivalTime:arrive||'',
+    adminId:ADMIN_UID
+  };
   const idx=DB.staffAtt.findIndex(a=>a.staffId==staffId&&a.date===date);
   if(idx>=0)DB.staffAtt[idx]=rec;else DB.staffAtt.push(rec);
-  await saveItem('staffAtt',rec);
-  const statusLabels={present:'✅ Present',late:'⏰ Late (Half Day)',half:'🌗 Half Day',absent:'❌ Absent',leave:'🏖 On Leave'};
-  showAl('sc-att-alert','ok',`${statusLabels[status]||status} marked for ${s.name} on ${fmtD(date)}`);
-  calcAllSalaries();
+  try{
+    await saveItem('staffAtt',rec);
+    const statusLabels={present:'✅ Present',late:'⏰ Late (Half Day auto-applied)',half:'🌗 Half Day',absent:'❌ Absent',leave:'🏖 On Leave'};
+    showAl('sc-att-alert','ok',`${statusLabels[status]||status} marked for <strong>${s.name}</strong> on ${fmtD(date)}${arrive?` — Arrived: ${arrive}`:''}`,5000);
+    calcAllSalaries();
+  }catch(e){
+    showAl('sc-att-alert','err','❌ Failed to save. Check connection.');
+  }
 }
 
 // ══════════════════════════════════════════
@@ -3229,15 +3252,60 @@ Priya Patel,9876543211,,Female,O+,3 Months,2025-08-31,Muscle Gain,160,60,,Zumba 
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='GymPro-Import-Template.csv';a.click();
 }
 
+function handleImpDrop(e){
+  e.preventDefault();
+  document.getElementById('imp-drop-zone').style.borderColor='var(--border2)';
+  const file=e.dataTransfer?.files?.[0];
+  if(file){const inp=document.getElementById('imp-excel');const dt=new DataTransfer();dt.items.add(file);inp.files=dt.files;loadImportFile(inp);}
+}
+
 function loadImportFile(inp){
   const file=inp.files[0];if(!file)return;
-  document.getElementById('imp-file-info').textContent=`📂 File: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const text=e.target.result;
-    parseImportCSV(text);
-  };
-  reader.readAsText(file);
+  document.getElementById('imp-file-info').innerHTML=`<span style="color:var(--green);font-weight:600">✅ File loaded: ${file.name} (${(file.size/1024).toFixed(1)} KB)</span>`;
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='csv'){
+    const reader=new FileReader();
+    reader.onload=e=>parseImportCSV(e.target.result);
+    reader.readAsText(file);
+  } else if(ext==='xlsx'||ext==='xls'){
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        // Use {raw:false} so numbers come as strings (preserves phone numbers)
+        // Also use cellText:true to avoid scientific notation
+        const wb=XLSX.read(e.target.result,{type:'array',raw:false,cellText:true,cellDates:true});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        // Get all rows as arrays of raw cell values (not CSV - avoids scientific notation for phones)
+        const allRows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+        if(!allRows.length){alert('File is empty!');return;}
+        // Auto-detect the real header row:
+        // The real header row has the most non-empty, non-numeric cells that look like field names
+        let headerRowIdx=0;
+        let bestScore=-1;
+        const knownHeaders=['name','phone','contact','mobile','client','member','plan','package','expiry','trainer','status','id','created'];
+        for(let i=0;i<Math.min(5,allRows.length);i++){
+          const row=allRows[i];
+          const score=row.filter(c=>{
+            const s=String(c||'').toLowerCase().trim();
+            return s&&isNaN(c)&&knownHeaders.some(k=>s.includes(k));
+          }).length;
+          if(score>bestScore){bestScore=score;headerRowIdx=i;}
+        }
+        importHeaders=allRows[headerRowIdx].map(c=>String(c||'').trim());
+        importRows=allRows.slice(headerRowIdx+1)
+          .filter(r=>r.some(c=>c!==null&&c!==undefined&&String(c).trim()!==''))
+          .map(r=>importHeaders.map((_,i)=>String(r[i]===null||r[i]===undefined?'':r[i]).trim()));
+        document.getElementById('imp-file-info').innerHTML=`<span style="color:var(--green);font-weight:600">✅ ${file.name} — ${importRows.length} rows found (header at row ${headerRowIdx+1})</span>`;
+        showImportMapping();
+      }catch(err){
+        console.error('Excel parse error:',err);
+        document.getElementById('imp-file-info').innerHTML=`<span style="color:var(--red)">❌ Could not read Excel file: ${err.message}</span>`;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    document.getElementById('imp-file-info').innerHTML=`<span style="color:var(--red)">❌ Unsupported file. Use .xlsx or .csv</span>`;
+  }
 }
 
 function parseImportCSV(text){
@@ -3256,26 +3324,83 @@ function parseImportCSV(text){
 }
 
 const IMPORT_FIELDS=[
-  {key:'name',label:'Name *',required:true},
-  {key:'phone',label:'Phone *',required:true},
-  {key:'email',label:'Email',required:false},
-  {key:'gender',label:'Gender',required:false},
-  {key:'blood',label:'Blood Group',required:false},
-  {key:'plan',label:'Plan Name',required:false},
-  {key:'expiry',label:'Expiry Date',required:false},
-  {key:'goal',label:'Goal',required:false},
-  {key:'height',label:'Height',required:false},
-  {key:'weight',label:'Weight',required:false},
-  {key:'trainerName',label:'Trainer',required:false},
-  {key:'batchName',label:'Batch',required:false},
+  {key:'name',   label:'Client Name *', required:true},
+  {key:'phone',  label:'Contact No *',  required:true},
+  {key:'plan',   label:'Package Details',required:false},
+  {key:'expiry', label:'Package Validity',required:false},
+  {key:'trainerName',label:'Trainer Name',required:false},
+  {key:'representative',label:'Representative',required:false},
+  {key:'status', label:'Status',        required:false},
+  {key:'createdOn',label:'Created On',  required:false},
+  {key:'clientId',label:'Client ID',   required:false},
+  {key:'membershipId',label:'Membership ID',required:false},
+  {key:'email',  label:'Email',         required:false},
+  {key:'gender', label:'Gender',        required:false},
+  {key:'blood',  label:'Blood Group',   required:false},
+  {key:'goal',   label:'Goal',          required:false},
+  {key:'height', label:'Height (cm)',   required:false},
+  {key:'weight', label:'Weight (kg)',   required:false},
+  {key:'batchName',label:'Batch',       required:false},
 ];
+
+// ── Phone cleaning: strip non-digits, remove leading country code (91/+91), keep last 10 digits
+function cleanPhone(raw){
+  const digits=(raw||'').replace(/\D/g,'');
+  // Remove leading 91 if 12 digits total (Indian mobile with country code)
+  if(digits.length===12&&digits.startsWith('91'))return digits.slice(2);
+  if(digits.length===11&&digits.startsWith('0'))return digits.slice(1);
+  return digits.slice(-10);
+}
+function isValidPhone(p){return p.length===10&&/^[6-9]/.test(p);}
+// Allow name-only rows (phone optional for import)
+function isValidRow(name,phone){return name.length>1&&(isValidPhone(phone)||phone.length===0);}
+
+function smartAutoMatch(fieldKey,headers){
+  const kw={
+    name:      ['client name','member name','full name','name','client','member'],
+    phone:     ['contact no','phone no','mobile no','phone','mobile','contact','number','mob','cell'],
+    email:     ['email','mail','e-mail'],
+    gender:    ['gender','sex'],
+    blood:     ['blood group','blood','group'],
+    plan:      ['package details','plan name','package','membership','plan','scheme'],
+    expiry:    ['package validity','expiry date','valid till','valid upto','expiry','expire','end date','validity'],
+    goal:      ['goal','fitness','objective'],
+    height:    ['height','ht'],
+    weight:    ['weight','wt','kg'],
+    trainerName:['trainer name','trainer','coach','pt'],
+    batchName: ['batch','class','session','slot'],
+    representative:['representative','rep','referred by','reference'],
+    status:    ['status','membership status'],
+    createdOn: ['created on','created date','join date','joined','joining date','date'],
+    clientId:  ['client id','client_id','clientid'],
+    membershipId:['membership id','membership_id','membershipid'],
+  };
+  const keys=kw[fieldKey]||[fieldKey];
+  // Priority 1: exact match (case-insensitive)
+  let idx=headers.findIndex(h=>keys.some(k=>h.toLowerCase().trim()===k.toLowerCase()));
+  if(idx>=0)return idx;
+  // Priority 2: header contains keyword
+  idx=headers.findIndex(h=>keys.some(k=>h.toLowerCase().includes(k.toLowerCase())));
+  return idx;
+}
+
+// Detect if a column looks like it contains phone numbers (sample first 5 rows)
+function colLooksLikePhone(colIdx){
+  const samples=importRows.slice(0,5).map(r=>(r[colIdx]||'').replace(/\D/g,''));
+  const phoneCount=samples.filter(s=>s.length>=8&&s.length<=13).length;
+  return phoneCount>=Math.min(2,samples.filter(s=>s).length);
+}
 
 function showImportMapping(){
   const section=document.getElementById('imp-mapping-section');if(section)section.style.display='';
   const grid=document.getElementById('imp-map-grid');if(!grid)return;
   grid.innerHTML=IMPORT_FIELDS.map(f=>{
-    // Auto-match column
-    const autoMatch=importHeaders.findIndex(h=>h.toLowerCase().replace(/[^a-z]/g,'').includes(f.key.toLowerCase().replace(/[^a-z]/g,''))||h.toLowerCase().includes(f.label.toLowerCase().replace(' *','').split(' ')[0].toLowerCase()));
+    let autoMatch=smartAutoMatch(f.key,importHeaders);
+    // Extra safeguard for phone: if auto-matched col doesn't look like a phone col, find the best phone-looking col
+    if(f.key==='phone'&&autoMatch>=0&&!colLooksLikePhone(autoMatch)){
+      const phoneCol=importHeaders.findIndex((_,i)=>colLooksLikePhone(i));
+      if(phoneCol>=0)autoMatch=phoneCol;
+    }
     return`<div class="fg"><label>${f.label}</label>
       <select id="imp-col-${f.key}">
         <option value="">— Skip —</option>
@@ -3283,9 +3408,7 @@ function showImportMapping(){
       </select>
     </div>`;
   }).join('');
-  // Auto-preview
   buildImportPreview();
-  // Watch changes
   grid.querySelectorAll('select').forEach(s=>s.addEventListener('change',buildImportPreview));
 }
 
@@ -3295,28 +3418,37 @@ function buildImportPreview(){
     const sel=document.getElementById('imp-col-'+f.key);
     if(sel&&sel.value!=='')mapping[f.key]=+sel.value;
   });
-  const nameCol=mapping['name'];const phoneCol=mapping['phone'];
-  if(nameCol===undefined||phoneCol===undefined){
+  const nameCol=mapping['name'];
+  if(nameCol===undefined){
     const section=document.getElementById('imp-preview-section');if(section)section.style.display='none';
     return;
   }
+  const phoneCol=mapping['phone'];
   const preview=importRows.slice(0,50).map((row,i)=>{
     const name=(row[nameCol]||'').trim();
-    const phone=(row[phoneCol]||'').replace(/\D/g,'').slice(-10);
-    const valid=name.length>1&&phone.length===10;
-    return{row,name,phone,valid,mapping,idx:i};
+    const rawPhone=phoneCol!==undefined?(row[phoneCol]||''):'';
+    const phone=cleanPhone(rawPhone);
+    const phoneOk=phoneCol===undefined||isValidPhone(phone)||rawPhone.trim()==='';
+    const valid=name.length>1&&(phoneCol===undefined||isValidPhone(phone));
+    return{row,name,phone,rawPhone,phoneOk,valid,mapping,idx:i};
   });
-  const valid=preview.filter(p=>p.valid);
+  const totalValid=importRows.filter(row=>{
+    const name=(row[nameCol]||'').trim();
+    const rawPhone=phoneCol!==undefined?(row[phoneCol]||''):'';
+    const phone=cleanPhone(rawPhone);
+    return name.length>1&&(phoneCol===undefined||isValidPhone(phone));
+  }).length;
   const section=document.getElementById('imp-preview-section');if(section)section.style.display='';
   const cntEl=document.getElementById('imp-valid-count');
-  if(cntEl)cntEl.textContent=`${valid.length} of ${importRows.length} valid`;
+  if(cntEl)cntEl.textContent=`${totalValid} of ${importRows.length} valid`;
   const tb=document.getElementById('imp-preview-tb');
   if(tb)tb.innerHTML=preview.slice(0,20).map(p=>{
     const planName=mapping['plan']!==undefined?p.row[mapping['plan']]||'—':'—';
     const expiry=mapping['expiry']!==undefined?p.row[mapping['expiry']]||'—':'—';
+    const phoneDisplay=p.phone?p.phone:`<span style="color:var(--red);font-size:11px">❌ ${p.rawPhone||'Empty'}</span>`;
     return`<tr><td style="color:var(--text3)">${p.idx+1}</td>
       <td><div style="font-weight:600">${p.name||'❌ Missing'}</div></td>
-      <td>${p.phone||'❌ Invalid'}</td>
+      <td>${phoneDisplay}</td>
       <td style="font-size:12px">${planName}</td>
       <td style="font-size:12px">${expiry}</td>
       <td>${p.valid?'<span class="pill pg">✅ OK</span>':'<span class="pill pr">❌ Skip</span>'}</td>
@@ -3333,13 +3465,13 @@ async function doExcelImport(){
     if(sel&&sel.value!=='')mapping[f.key]=+sel.value;
   });
   const nameCol=mapping['name'];const phoneCol=mapping['phone'];
-  if(nameCol===undefined||phoneCol===undefined){alert('Map Name and Phone columns first!');return;}
+  if(nameCol===undefined){alert('Map the Name column first!');return;}
   const validRows=importRows.filter(row=>{
     const name=(row[nameCol]||'').trim();
-    const phone=(row[phoneCol]||'').replace(/\D/g,'').slice(-10);
-    return name.length>1&&phone.length===10;
+    const phone=phoneCol!==undefined?cleanPhone(row[phoneCol]||''):'';
+    return name.length>1&&(phoneCol===undefined||isValidPhone(phone));
   });
-  if(!validRows.length){alert('No valid rows to import!');return;}
+  if(!validRows.length){alert('No valid rows to import!\n\nTip: Check that the Phone column is mapped correctly. If your numbers have country codes (like 91XXXXXXXXXX or +91-XXXX-XXXXXX), they will be cleaned automatically.\n\nIf you have no phone numbers, you can skip the Phone mapping.');return;}
   if(!confirm(`Import ${validRows.length} members? Existing members with same phone will be skipped.`))return;
   const prog=document.getElementById('imp-progress');if(prog)prog.style.display='';
   const bar=document.getElementById('imp-prog-bar');
@@ -3348,19 +3480,48 @@ async function doExcelImport(){
   const today=td();
   for(const row of validRows){
     const name=(row[nameCol]||'').trim();
-    const phone=(row[phoneCol]||'').replace(/\D/g,'').slice(-10);
-    // Skip duplicate phone
-    if(DB.members.find(m=>m.phone===phone)){skipped++;done++;continue;}
-    // Find plan by name
-    const planName=mapping['plan']!==undefined?(row[mapping['plan']]||'').trim():'';
-    const plan=DB.plans.find(p=>p.name.toLowerCase().includes(planName.toLowerCase()));
+    const phone=phoneCol!==undefined?cleanPhone(row[phoneCol]||''):'';
+    // Skip duplicate phone (only if phone present)
+    if(phone&&DB.members.find(m=>m.phone===phone)){skipped++;done++;continue;}
+    // Find plan by name (try to match with existing plans)
+    const planNameRaw=mapping['plan']!==undefined?(row[mapping['plan']]||'').trim():'';
+    const matchedPlan=planNameRaw?DB.plans.find(p=>p.name&&p.name.toLowerCase().includes(planNameRaw.toLowerCase())):null;
+    // Parse expiry date (supports dd-mm-yyyy, yyyy-mm-dd, etc.)
     let expiry='';
     if(mapping['expiry']!==undefined){
       const rawExp=(row[mapping['expiry']]||'').trim();
-      if(rawExp){try{expiry=new Date(rawExp).toISOString().slice(0,10);}catch(e){expiry='';}}
+      if(rawExp){
+        try{
+          // Handle dd-mm-yyyy format (common in Indian Excel exports)
+          const ddmm=/^(\d{2})-(\d{2})-(\d{4})$/.exec(rawExp);
+          if(ddmm){expiry=`${ddmm[3]}-${ddmm[2]}-${ddmm[1]}`;}
+          else{const d=new Date(rawExp);if(!isNaN(d))expiry=d.toISOString().slice(0,10);}
+        }catch(e){expiry='';}
+      }
     }
+    // Parse createdOn date
+    let createdAt=new Date().toISOString();
+    if(mapping['createdOn']!==undefined){
+      const rawC=(row[mapping['createdOn']]||'').trim();
+      if(rawC){
+        try{
+          const ddmm=/^(\d{2})-(\d{2})-(\d{4})$/.exec(rawC);
+          const parsed=ddmm?new Date(`${ddmm[3]}-${ddmm[2]}-${ddmm[1]}`):new Date(rawC);
+          if(!isNaN(parsed))createdAt=parsed.toISOString();
+        }catch(e){}
+      }
+    }
+    // Use existing Client ID / Membership ID from file if available
+    const importedClientId=mapping['clientId']!==undefined?(row[mapping['clientId']]||'').trim():'';
+    const importedMembershipId=mapping['membershipId']!==undefined?(row[mapping['membershipId']]||'').trim():'';
+    const clientId=importedClientId?'CLT-'+String(importedClientId).padStart(4,'0'):'CLT-'+String(DB.nid.m).padStart(4,'0');
+    const membershipId=importedMembershipId?'MEM-'+String(importedMembershipId).padStart(6,'0'):'MEM-'+String(DB.nid.m).padStart(6,'0');
+    // Status: map EXPIRED/ACTIVE → set expiry accordingly if not already set
+    const importedStatus=(mapping['status']!==undefined?(row[mapping['status']]||''):'').toUpperCase().trim();
+    if(!expiry&&importedStatus==='EXPIRED'){expiry=td();}// set to today so it shows as expired
     const mem={
       id:uid(),
+      clientId,membershipId,
       name,phone,
       email:mapping['email']!==undefined?row[mapping['email']]||'':'',
       gender:mapping['gender']!==undefined?row[mapping['gender']]||'':'',
@@ -3370,13 +3531,17 @@ async function doExcelImport(){
       weight:mapping['weight']!==undefined?+row[mapping['weight']]||0:0,
       trainerName:mapping['trainerName']!==undefined?row[mapping['trainerName']]||'':'',
       batchName:mapping['batchName']!==undefined?row[mapping['batchName']]||'':'',
-      planId:plan?plan.id:'',
-      planName:plan?plan.name:planName,
-      joindate:today,
+      representative:mapping['representative']!==undefined?row[mapping['representative']]||'':'',
+      source:'Excel Import',
+      planId:matchedPlan?matchedPlan.id:'',
+      planName:matchedPlan?matchedPlan.name:(planNameRaw||''),
+      joindate:createdAt.slice(0,10),
       expiry,
+      createdAt,
       importedFrom:'excel',
       adminId:ADMIN_UID
     };
+    DB.nid.m++;
     try{
       DB.members.push(mem);
       await saveItem('members',mem);
@@ -3398,7 +3563,7 @@ async function doExcelImport(){
   </div>`;
 }
 
-
+</script>
 <div id="toast-container"></div>
 </body>
 </html>
