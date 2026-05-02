@@ -15,6 +15,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <style>
 :root{
   --bg:#f0f4ff;--white:#fff;--card:#fff;--border:#e2e8f6;--border2:#c7d2ea;
@@ -1470,21 +1471,21 @@ async function updateItem(collName, id, data) {
 // LOGIN / LOGOUT
 // ══════════════════════════════════════════
 async function login() {
-  const email = document.getElementById('liu').value.trim();
+  let email = document.getElementById('liu').value.trim();
   const pass  = document.getElementById('lip').value;
   const errEl = document.getElementById('lerr');
   const btn   = document.getElementById('login-btn');
   errEl.textContent = '';
-  if (!email || !pass) { errEl.textContent = '❌ Enter email and password!'; return; }
+  if (!email || !pass) { errEl.textContent = '❌ Enter email/phone and password!'; return; }
+  if (/^\d{10}$/.test(email)) email = email + '@gympro.staff';
   btn.textContent = 'Signing in...';
   btn.disabled = true;
   try {
     await auth.signInWithEmailAndPassword(email, pass);
-    // watchAuth handles the rest
   } catch(e) {
-    let msg = '❌ Wrong email or password!';
-    if (e.code === 'auth/user-not-found')  msg = '❌ No account found with this email!';
-    if (e.code === 'auth/wrong-password')  msg = '❌ Wrong password!';
+    let msg = '❌ Wrong email/phone or password!';
+    if (e.code === 'auth/user-not-found') msg = '❌ No account found!';
+    if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-login-credentials') msg = '❌ Wrong password!';
     if (e.code === 'auth/too-many-requests') msg = '❌ Too many attempts. Try later.';
     if (e.code === 'auth/network-request-failed') msg = '❌ No internet! Check connection.';
     errEl.textContent = msg;
@@ -1627,7 +1628,7 @@ function recN(id){return'REC-'+String(id).padStart(5,'0');}
 function getSt(m){if(!m.expiry)return'unpaid';const d=dLeft(m.expiry);if(d<0)return'expired';if(d<=7)return'expiring';return'active';}
 function stPill(s){return{active:'<span class="pill pg">✅ Active</span>',expiring:'<span class="pill pa">⚡ Expiring</span>',expired:'<span class="pill pr">❌ Expired</span>',unpaid:'<span class="pill pgr">⚪ Unpaid</span>'}[s]||'';}
 const AVC=[['#1a56db','#fff'],['#0d9488','#fff'],['#dc2626','#fff'],['#7c3aed','#fff'],['#ea580c','#fff'],['#059669','#fff'],['#db2777','#fff']];
-function av(n,sz='sm'){const[bg,fg]=AVC[(n.charCodeAt(0)||0)%AVC.length];return`<div class="av av-${sz}" style="background:${bg};color:${fg}">${(n||'?')[0].toUpperCase()}</div>`;}
+function av(n,sz='sm'){const name=String(n||'?');const[bg,fg]=AVC[(name.charCodeAt(0)||0)%AVC.length];return`<div class="av av-${sz}" style="background:${bg};color:${fg}">${name[0].toUpperCase()}</div>`;}
 function showAl(el,type,msg,dur=4000){
   const cl={ok:'aok',err:'aerr',warn:'awarn'}[type];
   const elNode=document.getElementById(el);
@@ -2105,11 +2106,16 @@ function renderSalary(){
 }
 async function paySalary(staffId){
   if(!requireAdmin('pay salary'))return;
+  const formStaff=document.getElementById('slst')?.value||'';
+  const id=staffId||formStaff;
   const mon=document.getElementById('slmon')?.value||td().slice(0,7);
-  const s=DB.staff.find(x=>x.id==staffId);if(!s)return;
-  const rec={id:uid(),staffId,staffName:s.name,month:mon,amount:s.salary,date:td(),mode:'Cash'};
+  const s=DB.staff.find(x=>String(x.id)===String(id));
+  if(!s){alert('Select staff first!');return;}
+  const amount=+document.getElementById('slamt')?.value||+s.salary||0;
+  if(!amount){alert('Enter salary amount!');return;}
+  const rec={id:uid(),staffId:s.id,staffName:s.name,month:mon,amount,date:td(),mode:document.getElementById('slmd')?.value||'Cash',notes:document.getElementById('slno')?.value||''};
   DB.salaries.push(rec);await saveItem('salaries',rec);renderSalary();
-  alert(`✅ ₹${s.salary} salary paid to ${s.name}!`);
+  alert(`✅ ${fmtINR(amount)} salary recorded for ${s.name}!`);
 }
 
 // ══════════════════════════════════════════
@@ -2152,11 +2158,15 @@ async function delBatch(id){if(!requireAdmin('delete batches'))return;if(!confir
 function renderStaffAtt(){
   const fm=document.getElementById('sa-fm')?.value||td().slice(0,7);
   const fs=document.getElementById('sast')?.value||'';
-  let recs=DB.staffAtt.filter(a=>a.date.startsWith(fm));
-  if(fs)recs=recs.filter(a=>a.staffId==fs);
+  let recs=DB.staffAtt.filter(a=>(a.date||'').startsWith(fm));
+  if(fs)recs=recs.filter(a=>String(a.staffId)===String(fs));
   const tb=document.getElementById('sa-tb');if(!tb)return;
   if(!recs.length){tb.innerHTML=`<tr><td colspan="3"><div class="emp"><div class="ei">📅</div><p>No records.</p></div></td></tr>`;return;}
-  tb.innerHTML=[...recs].sort((a,b)=>b.date.localeCompare(a.date)).map(a=>{const s=DB.staff.find(x=>x.id==a.staffId)||{name:a.staffId};return`<tr><td>${fmtD(a.date)}</td><td><div style="font-weight:600">${s.name}</div></td><td>${a.status==='present'?'<span class="pill pg">✅ Present</span>':'<span class="pill pr">❌ Absent</span>'}</td></tr>`;}).join('');
+  tb.innerHTML=[...recs].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(a=>{
+    const s=DB.staff.find(x=>String(x.id)===String(a.staffId))||{name:a.staffName||a.staffId};
+    const pill=a.status==='present'?'<span class="pill pg">✅ Present</span>':a.status==='late'||a.status==='half'?'<span class="pill pa">🌗 Half Day</span>':'<span class="pill pr">❌ Absent</span>';
+    return`<tr><td><div style="font-weight:600">${escHtml(s.name)}</div></td><td>${fmtD(a.date)}</td><td>${pill}</td></tr>`;
+  }).join('');
 }
 async function markStaffAtt(){
   const staffId=document.getElementById('sast')?.value,date=document.getElementById('sasd')?.value||td(),status=document.getElementById('sass')?.value||'present';
@@ -2210,10 +2220,18 @@ function sendDietWA(id){
   window.open(`https://wa.me/${(m.phone.startsWith('91')?m.phone:'91'+m.phone)}?text=${encodeURIComponent(msg)}`,'_blank');
 }
 function renderPTPreview(){const el=document.getElementById('pt-preview');if(el)el.innerHTML=buildPTPromoHTML();}
-function loadPTSettings(){const pt=DB.pt;[['ptq2',pt.quote],['pttr',pt.trainer],['ptexp',pt.exp],['ptinc',pt.includes],['ptm',pt.monthly],['ptq2',pt.quarterly],['pty',pt.yearly]].forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.value=v||'';});}
+function loadPTSettings(){const pt=DB.pt;const map={ptm:pt.monthly,ptq:pt.quarterly,pty:pt.yearly,pttr:pt.trainer,ptexp:pt.exp,ptinc:pt.includes,ptq2:pt.quote};Object.entries(map).forEach(([id,value])=>{const el=document.getElementById(id);if(el)el.value=value??'';});}
 async function savePT(){
   if(!requireAdmin('change PT settings'))return;
-  DB.pt={...DB.pt,quote:document.getElementById('ptq2').value,trainer:document.getElementById('pttr').value,exp:document.getElementById('ptexp').value,includes:document.getElementById('ptinc').value,monthly:+document.getElementById('ptm').value||0,quarterly:+document.getElementById('ptq2').value||0,yearly:+document.getElementById('pty').value||0};
+  DB.pt={...DB.pt,
+    monthly:+document.getElementById('ptm').value||0,
+    quarterly:+document.getElementById('ptq').value||0,
+    yearly:+document.getElementById('pty').value||0,
+    trainer:document.getElementById('pttr').value.trim()||'Our Expert Trainer',
+    exp:document.getElementById('ptexp').value.trim()||'5+ Years',
+    includes:document.getElementById('ptinc').value.trim()||'Diet + Workout Plan',
+    quote:document.getElementById('ptq2').value.trim()||"Your body can do it. It's time to convince your mind. 💪"
+  };
   await saveDoc('pt',ADMIN_UID,DB.pt);renderPTPreview();alert('✅ PT settings saved!');
 }
 
@@ -2229,15 +2247,15 @@ function genReport(){
   else sendRepWA();
 }
 function buildReport(mon){
-  const pays=DB.payments.filter(p=>p.date.startsWith(mon));
-  const totalRev=pays.reduce((s,p)=>s+p.paid,0);
-  const totalDue=pays.reduce((s,p)=>s+p.balance,0);
-  const newMems=DB.members.filter(m=>m.joindate.startsWith(mon)).length;
-  const expiresMon=DB.members.filter(m=>m.expiry&&m.expiry.startsWith(mon)).length;
-  const expenses=DB.expenses.filter(e=>e.date.startsWith(mon));
-  const totalExp=expenses.reduce((s,e)=>s+e.amount,0);
+  const pays=DB.payments.filter(p=>(p.date||'').startsWith(mon));
+  const totalRev=pays.reduce((s,p)=>s+(+p.paid||0),0);
+  const totalDue=pays.reduce((s,p)=>s+(+p.balance||0),0);
+  const newMems=DB.members.filter(m=>(m.joindate||'').startsWith(mon)).length;
+  const expiresMon=DB.members.filter(m=>(m.expiry||'').startsWith(mon)).length;
+  const expenses=DB.expenses.filter(e=>(e.date||'').startsWith(mon));
+  const totalExp=expenses.reduce((s,e)=>s+(+e.amount||0),0);
   const salaries=DB.salaries.filter(s=>s.month===mon);
-  const totalSal=salaries.reduce((s,x)=>s+x.amount,0);
+  const totalSal=salaries.reduce((s,x)=>s+(+x.amount||0),0);
   const netProfit=totalRev-totalExp-totalSal;
   return{mon,pays,totalRev,totalDue,newMems,expiresMon,expenses,totalExp,salaries,totalSal,netProfit};
 }
@@ -2443,7 +2461,55 @@ function go(name){
   if(name==='monthly')document.getElementById('mr-mon').value=new Date().toISOString().slice(0,7);
   if(name==='staff'){renderStaffGrid();renderSalary();renderStaffAtt();}
 }
-function renderReports(){genReport();}
+function renderReports(){
+  if(!requireAdmin('view reports'))return;
+  const today=td();
+  const weekStart=wkStart();
+  const month=today.slice(0,7);
+  const year=today.slice(0,4);
+  const sum=(items)=>items.reduce((s,p)=>s+(+p.paid||0),0);
+  const salaryMonth=DB.salaries.filter(s=>s.month===month).reduce((s,x)=>s+(+x.amount||0),0);
+  const expMonth=DB.expenses.filter(e=>(e.date||'').startsWith(month)).reduce((s,e)=>s+(+e.amount||0),0);
+  const monthRevenue=sum(DB.payments.filter(p=>(p.date||'').startsWith(month)));
+  const vals=[
+    sum(DB.payments.filter(p=>p.date===today)),
+    sum(DB.payments.filter(p=>p.date>=weekStart&&p.date<=today)),
+    monthRevenue,
+    sum(DB.payments.filter(p=>(p.date||'').startsWith(year))),
+    salaryMonth,expMonth,
+    monthRevenue-salaryMonth-expMonth
+  ];
+  vals.forEach((v,i)=>{const el=document.getElementById('r'+i);if(el)el.textContent=fmtINR(v);});
+  const tb=document.getElementById('rep-tb');
+  if(tb){
+    const rows=[];
+    for(let i=11;i>=0;i--){
+      const d=new Date();d.setMonth(d.getMonth()-i);
+      const key=d.toISOString().slice(0,7);
+      const pays=DB.payments.filter(p=>(p.date||'').startsWith(key));
+      const revenue=sum(pays);
+      const salary=DB.salaries.filter(s=>s.month===key).reduce((s,x)=>s+(+x.amount||0),0);
+      const expenses=DB.expenses.filter(e=>(e.date||'').startsWith(key)).reduce((s,e)=>s+(+e.amount||0),0);
+      rows.push(`<tr><td>${fmtM(key)}</td><td>${pays.length}</td><td>${fmtINR(revenue)}</td><td>${fmtINR(salary)}</td><td>${fmtINR(expenses)}</td><td style="font-weight:700;color:${revenue-salary-expenses>=0?'var(--green)':'var(--red)'}">${fmtINR(revenue-salary-expenses)}</td></tr>`);
+    }
+    tb.innerHTML=rows.join('');
+  }
+  renderReportChart();
+}
+let ch3=null;
+function renderReportChart(){
+  const canvas=document.getElementById('ch3');
+  if(!canvas||typeof Chart==='undefined')return;
+  const labels=[],data=[];
+  for(let i=11;i>=0;i--){
+    const d=new Date();d.setMonth(d.getMonth()-i);
+    const key=d.toISOString().slice(0,7);
+    labels.push(fmtM(key));
+    data.push(DB.payments.filter(p=>(p.date||'').startsWith(key)).reduce((s,p)=>s+(+p.paid||0),0));
+  }
+  if(ch3)ch3.destroy();
+  ch3=new Chart(canvas,{type:'line',data:{labels,datasets:[{data,borderColor:'#1a56db',backgroundColor:'rgba(26,86,219,.12)',tension:.35,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+}
 
 // Close modals on background click
 document.querySelectorAll('.mo').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
@@ -3518,7 +3584,7 @@ async function doExcelImport(){
     const membershipId=importedMembershipId?'MEM-'+String(importedMembershipId).padStart(6,'0'):'MEM-'+String(DB.nid.m).padStart(6,'0');
     // Status: map EXPIRED/ACTIVE → set expiry accordingly if not already set
     const importedStatus=(mapping['status']!==undefined?(row[mapping['status']]||''):'').toUpperCase().trim();
-    if(!expiry&&importedStatus==='EXPIRED'){expiry=td();}// set to today so it shows as expired
+    if(!expiry&&importedStatus==='EXPIRED'){expiry=importedExpiredDate();}// set to yesterday so it correctly shows as expired
     const mem={
       id:uid(),
       clientId,membershipId,
@@ -3563,6 +3629,11 @@ async function doExcelImport(){
   </div>`;
 }
 
+
+// Imported EXPIRED members should actually show expired, not expiring today.
+function importedExpiredDate(){
+  return addD(td(),-1);
+}
 </script>
 <div id="toast-container"></div>
 </body>
