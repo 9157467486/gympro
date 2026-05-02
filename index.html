@@ -291,6 +291,7 @@ tr:hover td{background:#fafbff}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.t-ok{background:#059669}.toast.t-err{background:#dc2626}.toast.t-warn{background:#d97706}.toast.t-info{background:#1a56db}
 </style>
+<base target="_blank">
 </head>
 <body role="application" aria-label="GymPro Gym Management System">
 
@@ -555,12 +556,14 @@ tr:hover td{background:#fafbff}
       <div class="sh"><h3>🖐 Fingerprint Scanner</h3><div style="display:flex;gap:7px;align-items:center"><div id="bio-conn-dot" style="width:10px;height:10px;border-radius:50%;background:#dc2626;transition:background .3s"></div><span id="bio-conn-txt" style="font-size:12px;color:var(--text3)">Disconnected</span></div></div>
       <div class="sb2">
         <div id="bio-setup-info" style="background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r2);padding:11px 13px;font-size:12px;color:#92400e;margin-bottom:14px;line-height:1.7">
-          ⚙️ <strong>One-time Chrome Fix:</strong> SecuGen WebAPI uses a self-signed certificate. You must allow it once in Chrome.<br>
-          <strong>Step 1:</strong> <a href="http://127.0.0.1:8000/SGIFPCapture" target="_blank" style="color:var(--blue);font-weight:700">👆 Click here → Allow in Chrome</a> &nbsp;(click the page, then come back)<br>
-          <strong>Step 2:</strong> If Step 1 fails → <a href="https://localhost:8000/SGIFPCapture" target="_blank" style="color:var(--blue);font-weight:700">Try this link → click Advanced → Proceed</a><br>
-          <strong>Step 3:</strong> Come back here and click 🔌 Connect<br>
-          <a href="https://webapi.secugen.com/download/SGI_BWAPI_WIN_64bit.exe" target="_blank" style="color:var(--text3);font-size:11px">⬇ Download WebAPI (64-bit)</a> &nbsp;|&nbsp;
-          <a href="https://webapi.secugen.com/download/SGI_BWAPI_WIN_32bit.exe" target="_blank" style="color:var(--text3);font-size:11px">⬇ Download WebAPI (32-bit)</a>
+          ⚙️ <strong>Required Setup (Do This First):</strong><br>
+          <strong>Step 1:</strong> Download & install SecuGen HTTPS WebAPI:<br>
+          <a href="https://webapi.secugen.com/download/SGI_BWAPI_WIN_64bit.exe" target="_blank" style="color:var(--blue);font-weight:700">⬇ Download WebAPI (64-bit)</a> &nbsp;|&nbsp;
+          <a href="https://webapi.secugen.com/download/SGI_BWAPI_WIN_32bit.exe" target="_blank" style="color:var(--blue);font-weight:700">⬇ Download WebAPI (32-bit)</a><br>
+          <strong>Step 2:</strong> Open <a href="https://localhost:8000/SGIFPCapture" target="_blank" style="color:var(--blue);font-weight:700">this link</a> → Click <b>Advanced → Proceed to localhost (unsafe)</b><br>
+          <strong>Step 3:</strong> Plug in your SecuGen fingerprint scanner USB<br>
+          <strong>Step 4:</strong> Come back here and click 🔌 Connect<br>
+          <div style="margin-top:6px;font-size:11px;color:#92400e">💡 Why? Vercel uses HTTPS, so the scanner must also use HTTPS. HTTP is blocked by browsers.</div>
         </div>
         <div style="text-align:center;margin-bottom:16px">
           <div id="bio-scanner-visual" style="width:150px;height:150px;margin:0 auto;border-radius:50%;background:linear-gradient(135deg,#f5f3ff,#eff4ff);border:4px solid #e9d5ff;display:flex;align-items:center;justify-content:center;font-size:68px;transition:all .4s">🖐</div>
@@ -2655,9 +2658,10 @@ function totalDueReport(){
 // Official endpoints used here: SGIFPCapture and SGIMatchScore.
 // Auto-detect: HTTPS page (Vercel) must use https://localhost:8000 first
 // HTTP page (local python server) must use http://127.0.0.1:8000 first
-const SG_BASE_URLS = location.protocol === 'https:'
-  ? ['https://localhost:8000', 'http://127.0.0.1:8000']
-  : ['http://127.0.0.1:8000', 'https://localhost:8000'];
+// Vercel uses HTTPS, so scanner MUST use HTTPS too
+// Install SecuGen HTTPS WebAPI from: https://webapi.secugen.com/download/
+// Then visit https://localhost:8000/SGIFPCapture and click "Advanced → Proceed"
+const SG_BASE_URLS = ['https://localhost:8000'];
 const SG_CAPTURE_PATH = '/SGIFPCapture';
 const SG_MATCH_PATH = '/SGIMatchScore';
 let sgActiveBase = SG_BASE_URLS[0];
@@ -2757,16 +2761,16 @@ async function bioApi(path, payload, timeoutMs = 4000) {
 async function bioConnect() {
   bioSetStatus('Connecting...', 'scanning');
 
-  // Step 1: Try http://127.0.0.1:8000 first (works when served from http://)
-  // Step 2: Try https://localhost:8000 (needs certificate trust)
-  const tryUrls = ['http://127.0.0.1:8000', 'https://localhost:8000'];
+  // FIXED: Only try HTTPS - Vercel is HTTPS so HTTP is blocked by browser
+  const tryUrls = ['https://localhost:8000'];
   let connected = false;
   let lastError = '';
+  let deviceError = false;
 
   for (const base of tryUrls) {
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 3000);
+      const timer = setTimeout(() => ctrl.abort(), 5000);
       const resp = await fetch(base + SG_CAPTURE_PATH, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2776,22 +2780,26 @@ async function bioConnect() {
       clearTimeout(timer);
       if (resp.ok) {
         const data = await resp.json();
-        // Any response from the service means it's running
-        // ErrorCode 54 = no finger (normal), 0 = ready, 55 = no device
+        // ErrorCode 54 = no finger (normal - service running)
+        // ErrorCode 55 = no device plugged in
+        // ErrorCode 0 = ready
         if (data.ErrorCode === 55) {
+          deviceError = true;
           lastError = 'Scanner device not detected. Check USB connection.';
-          continue;
+          sgActiveBase = base; // Service IS running, just no device
+          connected = true; // Mark as connected but warn
+          break;
         }
         sgActiveBase = base;
         connected = true;
         break;
       }
     } catch(e) {
-      lastError = e.message;
+      lastError = e.name === 'TypeError' ? 'Cannot connect. Is SecuGen installed?' : e.message;
     }
   }
 
-  if (connected) {
+  if (connected && !deviceError) {
     bioConnected = true;
     bioSetStatus('Scanner Ready', 'connected');
     document.getElementById('bio-conn-txt').textContent = '🟢 Connected';
@@ -2799,18 +2807,24 @@ async function bioConnect() {
     document.getElementById('bio-scan-btn').disabled = false;
     document.getElementById('bio-enroll-btn').disabled = false;
     document.getElementById('bio-setup-info').style.display = 'none';
+  } else if (connected && deviceError) {
+    // Service running but no device
+    bioConnected = true;
+    bioSetStatus('Service Running — No Scanner', 'error');
+    document.getElementById('bio-conn-txt').textContent = '🟡 No Device';
+    document.getElementById('bio-device-status').textContent = '🔌 Plug in USB';
+    document.getElementById('bio-scan-btn').disabled = true;
+    document.getElementById('bio-enroll-btn').disabled = true;
+    alert('⚠️ SecuGen service is running but no fingerprint scanner detected.\n\nPlease:\n1. Unplug the USB scanner\n2. Wait 3 seconds\n3. Plug it back in\n4. Click Connect again');
   } else {
     bioConnected = false;
     bioSetStatus('Connection Failed', 'disconnected');
+    document.getElementById('bio-conn-txt').textContent = '🔴 Disconnected';
     document.getElementById('bio-device-status').textContent = '❌ Not Found';
+    document.getElementById('bio-scan-btn').disabled = true;
+    document.getElementById('bio-enroll-btn').disabled = true;
 
-    // Show a helpful targeted alert
-    const isHttpPage = location.protocol === 'http:';
-    const msg = lastError.includes('USB') || lastError.includes('device')
-      ? '❌ SecuGen service is running but scanner device not detected.\n\nPlease:\n• Unplug and re-plug the USB scanner\n• Wait 5 seconds\n• Click Connect again'
-      : isHttpPage
-        ? '❌ Cannot reach SecuGen WebAPI.\n\nQuick fix — open this URL in Chrome and click Allow:\n\nhttp://127.0.0.1:8000/SGIFPCapture\n\nThen come back and click Connect again.\n\n(If that doesn\'t work, also try:\nhttps://localhost:8000/SGIFPCapture\nClick Advanced → Proceed)'
-        : '❌ Cannot reach SecuGen WebAPI.\n\nOpen Chrome and visit:\nhttps://localhost:8000/SGIFPCapture\n\nClick Advanced → Proceed to localhost\nThen come back and click Connect again.';
+    const msg = `❌ Cannot connect to SecuGen WebAPI at https://localhost:8000\n\nPlease follow these steps:\n\n1️⃣ Download & install SecuGen WebAPI (64-bit):\n   https://webapi.secugen.com/download/SGI_BWAPI_WIN_64bit.exe\n\n2️⃣ Open Chrome and visit:\n   https://localhost:8000/SGIFPCapture\n\n3️⃣ Click "Advanced" → "Proceed to localhost (unsafe)"\n\n4️⃣ Come back and click Connect again\n\nError: ${lastError}`;
     alert(msg);
   }
 }
@@ -2844,13 +2858,17 @@ async function bioMatch(capturedFMD) {
   const enrolled = DB.fingerprints || [];
   if (!enrolled.length) return null;
   for (const fp of enrolled) {
-    try {
-      const data = await bioApi(SG_MATCH_PATH, { Template1: capturedFMD, Template2: fp.fmd, TemplateFormat: 'ISO' });
-      // SecuGen score is 0-199; higher is a closer match.
-      if (data.ErrorCode === 0 && data.MatchingScore >= 100) {
-        return fp;
-      }
-    } catch(e) { /* skip */ }
+    // Check ALL 3 stored templates for this person (FIXED!)
+    const templates = fp.fmds || [fp.fmd];
+    for (const template of templates) {
+      try {
+        const data = await bioApi(SG_MATCH_PATH, { Template1: capturedFMD, Template2: template, TemplateFormat: 'ISO' });
+        // SecuGen score is 0-199; higher is a closer match.
+        if (data.ErrorCode === 0 && data.MatchingScore >= 100) {
+          return fp;
+        }
+      } catch(e) { /* skip failed match */ }
+    }
   }
   return null;
 }
@@ -3030,15 +3048,12 @@ async function bioCollectEnrollSample() {
 
 async function bioFinalizeEnroll() {
   const stepEl = document.getElementById('bio-enroll-step-msg');
-  if (stepEl) stepEl.textContent = 'Creating template...';
-  // Merge 3 samples into one FMD using SecuGen API
+  if (stepEl) stepEl.textContent = 'Saving fingerprint templates...';
+
+  // FIXED: SecuGen WebAPI does NOT have SGIFPCreate endpoint.
+  // We store all 3 captured templates and match against any of them.
   try {
-    const resp = await fetch('https://localhost:8000/SGIFPCreate', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ FMDs: bioEnrollSamples, templateFormat: 'ISO' })
-    });
-    const data = await resp.json();
-    if (data.ErrorCode !== 0) throw new Error('Merge error: ' + data.ErrorCode);
+    if (bioEnrollSamples.length < 3) throw new Error('Need 3 scans. Got: ' + bioEnrollSamples.length);
 
     // Remove old enrollment if any
     if (!DB.fingerprints) DB.fingerprints = [];
@@ -3049,7 +3064,7 @@ async function bioFinalizeEnroll() {
       personId: bioEnrollTarget.id,
       personType: bioEnrollTarget.type,
       name: bioEnrollTarget.name,
-      fmd: data.FMD,
+      fmds: bioEnrollSamples,  // <-- Array of 3 templates (FIXED!)
       enrolledOn: td(),
       lastScan: null,
       scanCount: 0,
@@ -3079,7 +3094,7 @@ async function bioFinalizeEnroll() {
   }
 }
 
-// ── Render Enrolled Table ──────────────────
+// // ── Render Enrolled Table ──────────────────
 function renderEnrolled() {
   if (!DB.fingerprints) DB.fingerprints = [];
   const filter = document.getElementById('bio-enroll-filter')?.value || '';
