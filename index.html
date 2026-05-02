@@ -557,13 +557,16 @@ tr:hover td{background:#fafbff}
       <div class="sb2">
         <div id="bio-setup-info" style="background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r2);padding:11px 13px;font-size:12px;color:#92400e;margin-bottom:14px;line-height:1.7">
           ⚙️ <strong>Required Setup (Do This First):</strong><br>
-          <strong>Step 1:</strong> Download & install SecuGen HTTPS WebAPI:<br>
-          <a href="https://webapi.secugen.com/download/SGI_BWAPI_WIN_64bit.exe" target="_blank" style="color:var(--blue);font-weight:700">⬇ Download WebAPI (64-bit)</a> &nbsp;|&nbsp;
-          <a href="https://webapi.secugen.com/download/SGI_BWAPI_WIN_32bit.exe" target="_blank" style="color:var(--blue);font-weight:700">⬇ Download WebAPI (32-bit)</a><br>
-          <strong>Step 2:</strong> Open <a href="https://localhost:8000/SGIFPCapture" target="_blank" style="color:var(--blue);font-weight:700">this link</a> → Click <b>Advanced → Proceed to localhost (unsafe)</b><br>
+          <strong>Step 1:</strong> Install SecuGen WebAPI (you already have it ✅)<br>
+          <strong>Step 2:</strong> Open PowerShell → Run: <code style="background:#0f172a;color:#7dd3fc;padding:2px 6px;border-radius:4px">local-ssl-proxy --source 8443 --target 8000</code> (keep it running)<br>
           <strong>Step 3:</strong> Plug in your SecuGen fingerprint scanner USB<br>
           <strong>Step 4:</strong> Come back here and click 🔌 Connect<br>
-          <div style="margin-top:6px;font-size:11px;color:#92400e">💡 Why? Vercel uses HTTPS, so the scanner must also use HTTPS. HTTP is blocked by browsers.</div>
+          <div style="margin-top:8px;font-size:11px;color:#92400e;background:#fff7ed;border-radius:6px;padding:8px">
+            <b>🔴 Alternative: Use HTTPS version of SecuGen:</b><br>
+            Download from: <a href="https://webapi.secugen.com/download/SGI_BWAPI_WIN_64bit.exe" target="_blank" style="color:var(--blue)">https://webapi.secugen.com/download/SGI_BWAPI_WIN_64bit.exe</a><br>
+            Then you won't need the proxy.
+          </div>
+          <div style="margin-top:6px;font-size:11px;color:#92400e">💡 Why? Your SecuGen uses HTTP. Vercel uses HTTPS. The proxy converts HTTP→HTTPS.</div>
         </div>
         <div style="text-align:center;margin-bottom:16px">
           <div id="bio-scanner-visual" style="width:150px;height:150px;margin:0 auto;border-radius:50%;background:linear-gradient(135deg,#f5f3ff,#eff4ff);border:4px solid #e9d5ff;display:flex;align-items:center;justify-content:center;font-size:68px;transition:all .4s">🖐</div>
@@ -2658,10 +2661,10 @@ function totalDueReport(){
 // Official endpoints used here: SGIFPCapture and SGIMatchScore.
 // Auto-detect: HTTPS page (Vercel) must use https://localhost:8000 first
 // HTTP page (local python server) must use http://127.0.0.1:8000 first
-// Vercel uses HTTPS, so scanner MUST use HTTPS too
-// Install SecuGen HTTPS WebAPI from: https://webapi.secugen.com/download/
-// Then visit https://localhost:8000/SGIFPCapture and click "Advanced → Proceed"
-const SG_BASE_URLS = ['https://localhost:8000'];
+// HTTP SecuGen detected - using HTTPS proxy on port 8443
+// Run this command first: local-ssl-proxy --source 8443 --target 8000
+// Or install HTTPS version from: https://webapi.secugen.com/download/
+const SG_BASE_URLS = ['https://localhost:8443', 'https://localhost:8000'];
 const SG_CAPTURE_PATH = '/SGIFPCapture';
 const SG_MATCH_PATH = '/SGIMatchScore';
 let sgActiveBase = SG_BASE_URLS[0];
