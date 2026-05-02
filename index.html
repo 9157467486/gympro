@@ -1104,6 +1104,14 @@ let CURRENT_ROLE = null;   // 'admin' or 'staff'
 let ADMIN_UID = null;      // The owner's UID (all data tagged to this)
 
 const FB_CONFIG_KEY = 'gympro_fb_config';
+const DEFAULT_FB_CONFIG = {
+  apiKey: 'AIzaSyDGUbKojSMFSTIbEMGE76fMFXqLYYdr80I',
+  authDomain: 'gympro-18eb7.firebaseapp.com',
+  projectId: 'gympro-18eb7',
+  storageBucket: 'gympro-18eb7.firebasestorage.app',
+  messagingSenderId: '727239456753',
+  appId: '1:727239456753:web:44511155b0c5eb39ed3650'
+};
 
 function initFirebase(config) {
   try {
@@ -1176,7 +1184,12 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function hideLoader() { document.getElementById('app-loader').style.display = 'none'; }
-function showSetup()  { const el = document.getElementById('fb-setup'); el.style.display='flex'; }
+function showSetup()  {
+  const el = document.getElementById('fb-setup');
+  const cfg = document.getElementById('fb-config-input');
+  if (cfg && !cfg.value.trim()) cfg.value = JSON.stringify(DEFAULT_FB_CONFIG, null, 2);
+  el.style.display='flex';
+}
 function setSyncStatus(ok) {
   const el = document.getElementById('sync-status');
   if (!el) return;
@@ -2646,7 +2659,7 @@ function totalDueReport(){
 
 // SecuGen WebAPI runs as a local service on port 8000.
 // Official endpoints used here: SGIFPCapture and SGIMatchScore.
-const SG_BASE_URLS = ['https://localhost:8000', 'http://127.0.0.1:8000'];
+const SG_BASE_URLS = ['http://127.0.0.1:8000', 'https://localhost:8000'];
 const SG_CAPTURE_PATH = '/SGIFPCapture';
 const SG_MATCH_PATH = '/SGIMatchScore';
 let sgActiveBase = SG_BASE_URLS[0];
@@ -2717,22 +2730,27 @@ function bioSecuGenError(code) {
   return map[code] || ('SecuGen error code ' + code);
 }
 
-async function bioApi(path, payload) {
+async function bioApi(path, payload, timeoutMs = 4000) {
   const bases = [sgActiveBase, ...SG_BASE_URLS.filter(b => b !== sgActiveBase)];
   let lastErr = null;
   for (const base of bases) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const resp = await fetch(base + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload || {})
+        body: JSON.stringify(payload || {}),
+        signal: ctrl.signal
       });
       if (!resp.ok) throw new Error('WebAPI service not responding at ' + base);
       const data = await resp.json();
       sgActiveBase = base;
       return data;
     } catch (e) {
-      lastErr = e;
+      lastErr = e.name === 'AbortError' ? new Error('Timed out connecting to ' + base) : e;
+    } finally {
+      clearTimeout(timer);
     }
   }
   throw lastErr || new Error('SecuGen WebAPI not reachable');
@@ -2741,20 +2759,20 @@ async function bioApi(path, payload) {
 async function bioConnect() {
   bioSetStatus('Connecting...', 'scanning');
   try {
-    const data = await bioApi(SG_CAPTURE_PATH, { Timeout: 1, Quality: 1, TemplateFormat: 'ISO', ImageWSQRate: 0 });
+    const data = await bioApi(SG_CAPTURE_PATH, { Timeout: 1, Quality: 1, TemplateFormat: 'ISO', ImageWSQRate: 0 }, 2500);
     const okToConnect = data.ErrorCode === 0 || data.ErrorCode === 54 || data.ErrorCode === 101;
     if (!okToConnect) throw new Error(bioSecuGenError(data.ErrorCode));
     bioConnected = true;
-    bioSetStatus('Scanner Ready ?', 'connected');
-    document.getElementById('bio-conn-txt').textContent = '?? Connected';
-    document.getElementById('bio-device-status').textContent = '?? Ready';
+    bioSetStatus('Scanner Ready', 'connected');
+    document.getElementById('bio-conn-txt').textContent = 'Connected';
+    document.getElementById('bio-device-status').textContent = 'Ready';
     document.getElementById('bio-scan-btn').disabled = false;
     document.getElementById('bio-enroll-btn').disabled = false;
     document.getElementById('bio-setup-info').style.display = 'none';
   } catch(e) {
     bioConnected = false;
     bioSetStatus('Connection Failed', 'disconnected');
-    document.getElementById('bio-device-status').textContent = '? Not Found';
+    document.getElementById('bio-device-status').textContent = 'Not Found';
     alert('Could not connect to scanner.\n\nMake sure:\n1. SecuGen scanner is plugged in\n2. SecuGen driver is installed\n3. SecuGen WebAPI service is running\n4. If opening this HTML by double-click, serve it from http://localhost and open it in Chrome\n5. Open https://localhost:8000/SGIFPCapture once in Chrome, click Advanced, then Proceed if the certificate warning appears\n\nError: ' + e.message);
   }
 }
