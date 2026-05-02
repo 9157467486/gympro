@@ -2653,7 +2653,11 @@ function totalDueReport(){
 
 // SecuGen WebAPI runs as a local service on port 8000.
 // Official endpoints used here: SGIFPCapture and SGIMatchScore.
-const SG_BASE_URLS = ['http://127.0.0.1:8000', 'https://localhost:8000'];
+// Auto-detect: HTTPS page (Vercel) must use https://localhost:8000 first
+// HTTP page (local python server) must use http://127.0.0.1:8000 first
+const SG_BASE_URLS = location.protocol === 'https:'
+  ? ['https://localhost:8000', 'http://127.0.0.1:8000']
+  : ['http://127.0.0.1:8000', 'https://localhost:8000'];
 const SG_CAPTURE_PATH = '/SGIFPCapture';
 const SG_MATCH_PATH = '/SGIMatchScore';
 let sgActiveBase = SG_BASE_URLS[0];
