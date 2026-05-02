@@ -2644,9 +2644,12 @@ function totalDueReport(){
 // BIOMETRIC ATTENDANCE — SecuGen WebAPI
 // ══════════════════════════════════════════
 
-// SecuGen WebAPI runs as a local service on port 8000
-const SG_URL = 'https://localhost:8000/SGIFPCapture';
-const SG_INFO_URL = 'https://localhost:8000/SGIFPInfo';
+// SecuGen WebAPI runs as a local service on port 8000.
+// Official endpoints used here: SGIFPCapture and SGIMatchScore.
+const SG_BASE_URLS = ['https://localhost:8000', 'http://127.0.0.1:8000'];
+const SG_CAPTURE_PATH = '/SGIFPCapture';
+const SG_MATCH_PATH = '/SGIMatchScore';
+let sgActiveBase = SG_BASE_URLS[0];
 
 let bioConnected = false;
 let bioMode = 'scan';
@@ -2702,28 +2705,57 @@ function bioShowError(msg) {
 }
 
 // ── Connect / Disconnect ──────────────────
+function bioSecuGenError(code) {
+  const map = {
+    1:'Reader/driver creation failed', 2:'Reader function failed', 3:'Driver or sensor API issue',
+    51:'System file load failure', 52:'Sensor chip initialization failed', 53:'Sensor line dropped',
+    54:'No finger detected yet', 55:'Device not found', 56:'Driver load failed', 57:'Wrong image',
+    58:'USB bandwidth issue', 59:'Device busy', 60:'Cannot read device serial number', 61:'Unsupported device',
+    10001:'License error', 10002:'Invalid domain license', 10003:'License expired',
+    10004:'Browser origin not accepted. Open GymPro from http://localhost, not by double-clicking the HTML file.'
+  };
+  return map[code] || ('SecuGen error code ' + code);
+}
+
+async function bioApi(path, payload) {
+  const bases = [sgActiveBase, ...SG_BASE_URLS.filter(b => b !== sgActiveBase)];
+  let lastErr = null;
+  for (const base of bases) {
+    try {
+      const resp = await fetch(base + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {})
+      });
+      if (!resp.ok) throw new Error('WebAPI service not responding at ' + base);
+      const data = await resp.json();
+      sgActiveBase = base;
+      return data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('SecuGen WebAPI not reachable');
+}
+
 async function bioConnect() {
   bioSetStatus('Connecting...', 'scanning');
   try {
-    const resp = await fetch(SG_INFO_URL, { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Timeout: 10000 })
-    });
-    if (!resp.ok) throw new Error('Service not responding');
-    const data = await resp.json();
-    if (data.ErrorCode !== 0) throw new Error('Scanner not detected (ErrorCode ' + data.ErrorCode + ')');
+    const data = await bioApi(SG_CAPTURE_PATH, { Timeout: 1, Quality: 1, TemplateFormat: 'ISO', ImageWSQRate: 0 });
+    const okToConnect = data.ErrorCode === 0 || data.ErrorCode === 54 || data.ErrorCode === 101;
+    if (!okToConnect) throw new Error(bioSecuGenError(data.ErrorCode));
     bioConnected = true;
-    bioSetStatus('Scanner Ready ✓', 'connected');
-    document.getElementById('bio-conn-txt').textContent = '🟢 Connected';
-    document.getElementById('bio-device-status').textContent = '🟢 Ready';
+    bioSetStatus('Scanner Ready ?', 'connected');
+    document.getElementById('bio-conn-txt').textContent = '?? Connected';
+    document.getElementById('bio-device-status').textContent = '?? Ready';
     document.getElementById('bio-scan-btn').disabled = false;
     document.getElementById('bio-enroll-btn').disabled = false;
     document.getElementById('bio-setup-info').style.display = 'none';
   } catch(e) {
     bioConnected = false;
     bioSetStatus('Connection Failed', 'disconnected');
-    document.getElementById('bio-device-status').textContent = '❌ Not Found';
-    alert('⚠️ Could not connect to scanner.\n\nMake sure:\n1. Scanner is plugged in via USB\n2. SecuGen driver is installed\n3. SecuGen WebAPI service is running\n\nError: ' + e.message);
+    document.getElementById('bio-device-status').textContent = '? Not Found';
+    alert('Could not connect to scanner.\n\nMake sure:\n1. SecuGen scanner is plugged in\n2. SecuGen driver is installed\n3. SecuGen WebAPI service is running\n4. If opening this HTML by double-click, serve it from http://localhost and open it in Chrome\n5. Open https://localhost:8000/SGIFPCapture once in Chrome, click Advanced, then Proceed if the certificate warning appears\n\nError: ' + e.message);
   }
 }
 
@@ -2741,14 +2773,9 @@ function bioDisconnect() {
 async function bioCapture() {
   if (!bioConnected) { alert('Connect scanner first!'); return null; }
   try {
-    const resp = await fetch(SG_URL, { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Timeout: 15000, Quality: 50, templateFormat: 'ISO', imageWSQRate: 2.25 })
-    });
-    if (!resp.ok) throw new Error('Capture failed: ' + resp.status);
-    const data = await resp.json();
-    if (data.ErrorCode !== 0) throw new Error('Scan error code: ' + data.ErrorCode);
-    return data.BMPBase64 ? { fmd: data.TemplateBase64, img: data.BMPBase64, quality: data.Quality } : null;
+    const data = await bioApi(SG_CAPTURE_PATH, { Timeout: 15000, Quality: 50, TemplateFormat: 'ISO', ImageWSQRate: 2.25 });
+    if (data.ErrorCode !== 0) throw new Error(bioSecuGenError(data.ErrorCode));
+    return data.TemplateBase64 ? { fmd: data.TemplateBase64, img: data.BMPBase64 || '', quality: data.ImageQuality || data.Quality || 0 } : null;
   } catch(e) {
     bioSetStatus('Scan Failed — Try Again', 'error');
     console.error('Capture error:', e);
@@ -2762,14 +2789,10 @@ async function bioMatch(capturedFMD) {
   if (!enrolled.length) return null;
   for (const fp of enrolled) {
     try {
-      const resp = await fetch('https://localhost:8000/SGIFPMatch', { method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ FMD1: capturedFMD, FMD2: fp.fmd, templateFormat: 'ISO' })
-      });
-      const data = await resp.json();
-      // Score < 100000 means strong match (lower = better in SecuGen)
-      if (data.ErrorCode === 0 && data.MatchingScore < 100000) {
-        return fp; // matched!
+      const data = await bioApi(SG_MATCH_PATH, { Template1: capturedFMD, Template2: fp.fmd, TemplateFormat: 'ISO' });
+      // SecuGen score is 0-199; higher is a closer match.
+      if (data.ErrorCode === 0 && data.MatchingScore >= 100) {
+        return fp;
       }
     } catch(e) { /* skip */ }
   }
@@ -2952,14 +2975,11 @@ async function bioCollectEnrollSample() {
 async function bioFinalizeEnroll() {
   const stepEl = document.getElementById('bio-enroll-step-msg');
   if (stepEl) stepEl.textContent = 'Creating template...';
-  // Merge 3 samples into one FMD using SecuGen API
   try {
-    const resp = await fetch('https://localhost:8000/SGIFPCreate', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ FMDs: bioEnrollSamples, templateFormat: 'ISO' })
-    });
-    const data = await resp.json();
-    if (data.ErrorCode !== 0) throw new Error('Merge error: ' + data.ErrorCode);
+    // Store the latest successful SecuGen template. Three scans are still collected
+    // so the operator can verify the same finger captures reliably before saving.
+    const enrolledTemplate = bioEnrollSamples[bioEnrollSamples.length - 1];
+    if (!enrolledTemplate) throw new Error('No fingerprint template captured');
 
     // Remove old enrollment if any
     if (!DB.fingerprints) DB.fingerprints = [];
@@ -2970,7 +2990,7 @@ async function bioFinalizeEnroll() {
       personId: bioEnrollTarget.id,
       personType: bioEnrollTarget.type,
       name: bioEnrollTarget.name,
-      fmd: data.FMD,
+      fmd: enrolledTemplate,
       enrolledOn: td(),
       lastScan: null,
       scanCount: 0,
