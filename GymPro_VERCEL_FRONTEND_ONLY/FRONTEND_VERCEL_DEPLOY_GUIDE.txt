@@ -1,0 +1,58 @@
+GymPro Vercel Frontend Deploy Guide
+==================================
+
+Vercel must deploy frontend files only.
+The K40 backend folder is ignored by .vercelignore.
+
+Required Frontend Files
+-----------------------
+index.html
+GymPro.html
+GymPro_Daily.html
+vercel.json
+.vercelignore
+.gitignore
+README.txt
+OWNER_SETUP_GUIDE.txt
+
+Do Not Deploy To Vercel
+-----------------------
+backend/
+*.py
+*.bat
+.env
+serviceAccountKey.json
+
+GitHub Structure
+----------------
+If your GitHub repo has:
+
+gympro/
+  GymPro_K40_PRO_CLEAN/
+    index.html
+    vercel.json
+
+Then in Vercel set Root Directory to:
+GymPro_K40_PRO_CLEAN
+
+Vercel Settings
+---------------
+Framework Preset: Other
+Build Command: empty
+Output Directory: empty
+Install Command: empty
+Root Directory: GymPro_K40_PRO_CLEAN
+
+After Changing Files
+--------------------
+1. Upload/commit changed files to GitHub.
+2. Go to Vercel -> Deployments.
+3. Click Redeploy.
+4. Visit the production domain.
+
+Expected Result
+---------------
+https://your-domain.vercel.app opens GymPro directly.
+No Python build runs.
+No K40 device code runs on Vercel.
+No 404 route error.
