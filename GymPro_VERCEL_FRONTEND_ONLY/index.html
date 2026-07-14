@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -751,7 +751,7 @@ tr:hover td{background:#fafbff}
       <div id="sa-alert" style="margin-top:8px"></div>
       </div>
     </div>
-    <div class="sec"><div class="sh"><h3>Staff Attendance Log</h3><input type="month" id="sa-fm" onchange="renderStaffAtt()" style="width:150px"></div><div class="snp"><div class="tw"><table><thead><tr><th>Staff</th><th>Date</th><th>Status</th></tr></thead><tbody id="sa-tb"></tbody></table></div></div></div>
+    <div class="sec"><div class="sh"><h3>Staff Attendance Log</h3><input type="month" id="sa-fm" onchange="renderStaffAtt()" style="width:150px"></div><div class="snp"><div class="tw"><table><thead><tr><th>Staff</th><th>Date</th><th>Shift</th><th>In</th><th>Out</th><th>Status</th></tr></thead><tbody id="sa-tb"></tbody></table></div></div></div>
   </div>
 </div>
 
@@ -1457,6 +1457,7 @@ async function createStaffAccount() {
   if (!/^\d{10}$/.test(phone)) { errEl.textContent='❌ Enter valid 10-digit phone!'; return; }
   var email = phone + '@gympro.staff';
   btn.textContent = 'Creating...'; btn.disabled = true;
+  if(LOCAL_MODE||!db){errEl.style.color='red';errEl.textContent='❌ Staff accounts require Firebase cloud mode.';btn.textContent='✅ Create Account';btn.disabled=false;return;}
   try {
     var savedConfig = JSON.parse(localStorage.getItem(FB_CONFIG_KEY));
     var secondApp = firebase.initializeApp(savedConfig, 'staffApp_' + Date.now());
@@ -1510,7 +1511,7 @@ async function doImp(e) {
         const snap=await db.collection(col).where('adminId','==',ADMIN_UID).get();
         const batch=db.batch(); snap.docs.forEach(d=>batch.delete(d.ref)); await batch.commit();
       }
-      await Promise.all([
+      const savePromises=[
         ...DB.members.map(x=>saveItem('members',x)),
         ...DB.payments.map(x=>saveItem('payments',x)),
         ...DB.plans.map(x=>saveItem('plans',x)),
@@ -1519,9 +1520,11 @@ async function doImp(e) {
         ...DB.expenses.map(x=>saveItem('expenses',x)),
         ...DB.diets.map(x=>saveItem('diets',x)),
         saveDoc('settings',ADMIN_UID,DB.settings),
-        saveDoc('pt',ADMIN_UID,DB.pt),
-        db.collection('meta').doc(ADMIN_UID).set({nid:DB.nid,lastRep:DB.lastRep,adminId:ADMIN_UID})
-      ]);
+        saveDoc('pt',ADMIN_UID,DB.pt)
+      ];
+      if(!LOCAL_MODE&&db) savePromises.push(db.collection('meta').doc(ADMIN_UID).set({nid:DB.nid,lastRep:DB.lastRep,adminId:ADMIN_UID}));
+      else saveLocalDB();
+      await Promise.all(savePromises);
       alert('✅ Backup restored! Reloading...'); location.reload();
     } catch(err) { alert('❌ Invalid backup file!\n'+err.message); }
   };
@@ -1532,11 +1535,16 @@ async function clearAll() {
   if(!confirm('⚠️ DELETE ALL DATA? This cannot be undone!'))return;
   if(!confirm('Last chance — are you 100% sure?'))return;
   const cols=['members','payments','plans','staff','batches','salaries','staffAtt','memberAtt','expenses','diets','biometricRawLogs','unmatchedBiometricLogs','auditLogs','receipts','reports'];
-  for(const col of cols) {
-    const snap=await db.collection(col).where('adminId','==',ADMIN_UID).get();
-    const b=db.batch(); snap.docs.forEach(d=>b.delete(d.ref)); await b.commit();
+  if(!LOCAL_MODE&&db){
+    for(const col of cols) {
+      const snap=await db.collection(col).where('adminId','==',ADMIN_UID).get();
+      const b=db.batch(); snap.docs.forEach(d=>b.delete(d.ref)); await b.commit();
+    }
+    await db.collection('meta').doc(ADMIN_UID).delete();
   }
-  await db.collection('meta').doc(ADMIN_UID).delete();
+  cols.forEach(col=>{if(Array.isArray(DB[col]))DB[col]=[];});
+  DB.nid={m:1,p:1}; DB.lastRep='';
+  saveLocalDB();
   alert('✅ All data cleared!'); location.reload();
 }
 
@@ -1727,6 +1735,8 @@ async function paySalaryCalc(staffId, mon, amount) {
   const s=DB.staff.find(x=>String(x.id)===String(staffId)); if(!s)return;
   if(!confirm(`Pay ${fmtINR(amount)} salary to ${s.name} for ${fmtM(mon)}?`))return;
   const mode=prompt('Payment mode?\n1. Cash\n2. UPI\n3. Bank Transfer','Cash')||'Cash';
+  const alreadyExists=DB.salaries.some(x=>String(x.staffId)===String(staffId)&&x.month===mon);
+  if(alreadyExists){if(!confirm(`⚠️ Salary for ${s.name} for ${fmtM(mon)} was already paid! Pay again anyway?`))return;}
   const rec={id:String(uid()),staffId:String(staffId),staffName:s.name,month:mon,amount,date:td(),mode,notes:''};
   DB.salaries.push(rec);
   await saveItem('salaries',rec);
@@ -1775,10 +1785,20 @@ async function markStaffAttTime() {
     const [ah,am]=arrive.split(':').map(Number);
     if((ah*60+am)>(sh*60+sm+staffGraceMinutes())) status='late';
   }
-  const stat=status==='present'?{shiftStatus:'Full',lateStatus:'On Time'}:{shiftStatus:'Half',lateStatus:'Late'};
-  const rec={id:staffId+'_'+date+'_'+shift.shiftName,staffId,staffName:s.name,date,status,session,shiftName:shift.shiftName,checkInTime:arrive||'',shiftStatus:stat.shiftStatus,lateStatus:stat.lateStatus,method:'manual',adminId:ADMIN_UID};
-  const idx=DB.staffAtt.findIndex(a=>String(a.staffId)===String(staffId)&&a.date===date&&a.shiftName===shift.shiftName);
-  if(idx>=0) DB.staffAtt[idx]=rec; else DB.staffAtt.push(rec);
+  // absent/leave/half — save as legacy (no shiftName) so staffDailyStatus handles correctly
+  const isAbsentOrLeave = (status==='absent'||status==='leave'||status==='half');
+  let stat, rec;
+  if(isAbsentOrLeave){
+    stat={shiftStatus: status==='half'?'Half':'Missing', lateStatus:'Manual'};
+    rec={id:staffId+'_'+date+'_legacy',staffId,staffName:s.name,date,status,session,shiftStatus:stat.shiftStatus,lateStatus:stat.lateStatus,method:'manual',adminId:ADMIN_UID};
+    const idx=DB.staffAtt.findIndex(a=>String(a.staffId)===String(staffId)&&a.date===date&&!a.shiftName);
+    if(idx>=0) DB.staffAtt[idx]=rec; else DB.staffAtt.push(rec);
+  } else {
+    stat=status==='present'?{shiftStatus:'Full',lateStatus:'On Time'}:{shiftStatus:'Half',lateStatus:'Late'};
+    rec={id:staffId+'_'+date+'_'+shift.shiftName,staffId,staffName:s.name,date,status,session,shiftName:shift.shiftName,checkInTime:arrive||'',shiftStatus:stat.shiftStatus,lateStatus:stat.lateStatus,method:'manual',adminId:ADMIN_UID};
+    const idx=DB.staffAtt.findIndex(a=>String(a.staffId)===String(staffId)&&a.date===date&&a.shiftName===shift.shiftName);
+    if(idx>=0) DB.staffAtt[idx]=rec; else DB.staffAtt.push(rec);
+  }
   await saveItem('staffAtt',rec);
   const labels={present:'✅ Present',late:'⏰ Late (Half Day)',half:'🌗 Half Day',absent:'❌ Absent',leave:'🏖 On Leave'};
   showAl('sc-att-alert','ok',`${labels[status]||status} marked for <strong>${s.name}</strong> on ${fmtD(date)} (${session})${arrive?' — Arrived: '+arrive:''}`,5000);
@@ -2357,9 +2377,13 @@ async function delExpense(id){await deleteItem('expenses',id);renderExpenses();r
 function renderStaffAtt(){
   const mon=document.getElementById('sa-fm')?.value||'';
   let list=(DB.staffAtt||[]).slice().reverse(); if(mon)list=list.filter(a=>(a.date||'').startsWith(mon));
-  const tb=document.getElementById('sa-tb'); if(tb)tb.innerHTML=list.map(a=>`<tr><td>${escHtml(a.staffName||staffName(a.staffId))}</td><td>${fmtD(a.date)}</td><td>${escHtml(a.status||'')}</td></tr>`).join('')||'<tr><td colspan="3"><div class="emp"><p>No staff attendance.</p></div></td></tr>';
+  const tb=document.getElementById('sa-tb'); if(tb)tb.innerHTML=list.length?list.map(a=>`<tr><td>${escHtml(a.staffName||staffName(a.staffId))}</td><td>${fmtD(a.date)}</td><td>${escHtml(a.shiftName||'-')}</td><td>${escHtml(a.checkInTime||a.time||'-')}</td><td>${escHtml(a.checkOutTime||'-')}</td><td>${escHtml(a.shiftStatus||a.status||'')}</td></tr>`).join(''):'<tr><td colspan="6"><div class="emp"><p>No staff attendance.</p></div></td></tr>';
 }
-function updBadge(){const el=document.getElementById('bdg-exp');if(el)el.textContent=(DB.members||[]).filter(m=>getSt(m)==='expired'||getSt(m)==='expiring').length;}
+function updBadge(){
+  const n=(DB.members||[]).filter(m=>getSt(m)==='expired'||getSt(m)==='expiring').length;
+  const el=document.getElementById('nb');
+  if(el){ el.textContent=n; el.style.display = n>0 ? '' : 'none'; }
+}
 function selectedAddMemberPlan(){return (DB.plans||[]).find(p=>String(p.id)===String(document.getElementById('ampl')?.value));}
 function addDaysISO(baseDate, days){const d=new Date(baseDate||td());d.setDate(d.getDate()+Number(days||0));return td(d);}
 function updateAddMemberPaymentPreview(){
@@ -2586,8 +2610,48 @@ function sendYearlyWA(year){
   if(url)window.open(url,'_blank');
 }
 function bulkRCurr(){go('whatsapp');document.getElementById('wag').value='expiring';document.getElementById('wat').value='reminder';document.getElementById('wam').value='';loadWATmpl();}
-function bulkR(){bulkRCurr();}
+function bulkR(group){
+  go('whatsapp');
+  document.getElementById('wag').value = group || 'expiring';
+  document.getElementById('wat').value = group==='expired' ? 'expired' : 'reminder';
+  document.getElementById('wam').value='';
+  loadWATmpl();
+}
 function waViewed(){const m=DB.members.find(x=>String(x.id)===String(window.viewedId));if(m){waMember=m;sendIndWA();}}
+function viewMember(id){
+  const m=DB.members.find(x=>String(x.id)===String(id)); if(!m)return;
+  window.viewedId=id;
+  const plan=DB.plans.find(p=>p.id===m.planId);
+  const st=getSt(m);
+  const lastPay=DB.payments.filter(p=>String(p.memberId)===String(id)).slice(-1)[0];
+  const body=document.getElementById('mem-mo-body'); if(!body)return;
+  body.innerHTML=`
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+      <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--teal));display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;font-weight:800;flex-shrink:0">${escHtml((m.name||'?')[0].toUpperCase())}</div>
+      <div style="flex:1">
+        <div style="font-size:20px;font-weight:800">${escHtml(m.name)}</div>
+        <div style="font-size:13px;color:var(--text3)">${escHtml(m.phone||'')} ${m.email?'• '+escHtml(m.email):''}</div>
+        <div style="margin-top:6px">${stPill(st)}</div>
+      </div>
+    </div>
+    <div class="dvd"></div>
+    <div class="fgrid" style="font-size:13px">
+      <div><span style="color:var(--text3)">Plan</span><div style="font-weight:700">${escHtml(plan?plan.name:(m.planName||'—'))}</div></div>
+      <div><span style="color:var(--text3)">Expiry</span><div style="font-weight:700">${fmtD(m.expiry)||'—'}</div></div>
+      <div><span style="color:var(--text3)">Joined</span><div style="font-weight:700">${fmtD(m.joindate||m.createdAt)||'—'}</div></div>
+      <div><span style="color:var(--text3)">Client ID</span><div style="font-weight:700">${escHtml(m.clientId||'—')}</div></div>
+      <div><span style="color:var(--text3)">Trainer</span><div style="font-weight:700">${escHtml(m.trainerName||'—')}</div></div>
+      <div><span style="color:var(--text3)">Pending</span><div style="font-weight:700;color:var(--red)">${fmtINR(latestDueForMember(m))}</div></div>
+      ${m.gender?`<div><span style="color:var(--text3)">Gender</span><div style="font-weight:700">${escHtml(m.gender)}</div></div>`:''}
+      ${m.blood?`<div><span style="color:var(--text3)">Blood Group</span><div style="font-weight:700">${escHtml(m.blood)}</div></div>`:''}
+      ${m.goal?`<div><span style="color:var(--text3)">Goal</span><div style="font-weight:700">${escHtml(m.goal)}</div></div>`:''}
+      ${m.representative?`<div><span style="color:var(--text3)">Representative</span><div style="font-weight:700">${escHtml(m.representative)}</div></div>`:''}
+    </div>
+    ${lastPay?`<div class="dvd"></div><div class="hb hb-g" style="font-size:12px"><b>Last Payment:</b> ${fmtINR(lastPay.paid)} on ${fmtD(lastPay.date)} via ${escHtml(lastPay.mode||'')} (Receipt: ${escHtml(lastPay.receiptNo||'')})</div>`:''}
+    ${m.notes?`<div class="dvd"></div><div class="hb" style="font-size:12px;color:var(--text2)"><b>Notes:</b> ${escHtml(m.notes)}</div>`:''}
+  `;
+  openM('mem-mo');
+}
 function goCollect(){closeM('mem-mo');go('fees');}
 function prevPh(){showToast('Photo preview is optional in this version','warn');}
 let dietMember=null;
@@ -2724,9 +2788,39 @@ function openRenewalWA(id){const m=(DB.members||[]).find(x=>String(x.id)===Strin
 function rawLogDocId(log){return [log.deviceUserId,log.punchDate,log.punchTime].map(x=>String(x||'').replace(/[^A-Za-z0-9_-]/g,'')).join('_');}
 function normalizeK40Log(log){const date=log.punchDate||log.date||String(log.punchDateTime||'').slice(0,10)||td();const time=(log.punchTime||log.time||String(log.punchDateTime||'').slice(11,16)||new Date().toTimeString().slice(0,5)).slice(0,5);return {rawLogId:String(log.rawLogId||rawLogDocId({deviceUserId:log.deviceUserId||log.userId,punchDate:date,punchTime:time})),deviceUserId:String(log.deviceUserId||log.userId||log.uid||'').trim(),punchDate:date,punchTime:time,deviceName:log.deviceName||'ZKTeco K40 Pro'};}
 async function saveRawK40Log(log){const n=normalizeK40Log(log);if(!n.deviceUserId)return {ok:false,reason:'Missing deviceUserId'};const id=rawLogDocId(n);if((DB.biometricRawLogs||[]).some(x=>x.id===id))return {ok:true,duplicate:true,log:n};const rec=Object.assign({id,adminId:ADMIN_UID,syncedAt:new Date().toISOString(),processed:false},n);await saveItem('biometricRawLogs',rec);return {ok:true,log:rec};}
-async function processK40RawLog(raw){if(!raw||raw.processed)return {ok:true,skipped:true};const found=findPersonByDeviceUserId(raw.deviceUserId);if(!found){await saveItem('unmatchedBiometricLogs',{id:'unmatched_'+raw.id,rawLogId:raw.rawLogId||raw.id,deviceUserId:raw.deviceUserId,punchDate:raw.punchDate,punchTime:raw.punchTime,reason:'No matching member/staff found',deviceName:raw.deviceName||'ZKTeco K40 Pro',createdAt:new Date().toISOString(),adminId:ADMIN_UID});await updateItem('biometricRawLogs',raw.id,{processed:true,processedAt:new Date().toISOString(),result:'unmatched'});return {ok:false,unmatched:true};}const result=found.type==='staff'?await saveStaffBioAttendance({personId:found.person.id,deviceUserId:raw.deviceUserId,name:found.person.name},raw.punchDate,raw.punchTime):await saveMemberBioAttendance({personId:found.person.id,deviceUserId:raw.deviceUserId,name:found.person.name},raw.punchDate,raw.punchTime);await updateItem('biometricRawLogs',raw.id,{processed:true,processedAt:new Date().toISOString(),result:result.message||'processed'});return result;}
+async function processK40RawLog(raw){if(!raw||raw.processed)return {ok:true,skipped:true};const found=findPersonByDeviceUserId(raw.deviceUserId);if(!found){await saveItem('unmatchedBiometricLogs',{id:'unmatched_'+raw.id,rawLogId:raw.rawLogId||raw.id,deviceUserId:raw.deviceUserId,punchDate:raw.punchDate,punchTime:raw.punchTime,reason:'No matching member/staff found',deviceName:raw.deviceName||'ZKTeco K40 Pro',createdAt:new Date().toISOString(),adminId:ADMIN_UID});await updateItem('biometricRawLogs',raw.id,{processed:true,processedAt:new Date().toISOString(),result:'unmatched'});return {ok:false,unmatched:true};}const result=found.type==='staff'?await saveStaffBioAttendance({personId:found.person.id,deviceUserId:raw.deviceUserId,name:found.person.name},raw.punchDate,raw.punchTime):await saveMemberBioAttendance({personId:found.person.id,deviceUserId:raw.deviceUserId,name:found.person.name},raw.punchDate,raw.punchTime);await updateItem('biometricRawLogs',raw.id,{processed:true,processedAt:new Date().toISOString(),result:result.message||'processed',personName:found.person.name,personType:found.type==='staff'?'Staff':'Member'});return result;}
 async function saveMemberBioAttendance(matched,date,time){const m=(DB.members||[]).find(x=>String(x.id)===String(matched.personId));if(!m)return {ok:false,message:'Member not found'};ensurePersonBioFields(m,'member');const old=(DB.memberAtt||[]).find(a=>String(a.memberId)===String(m.id)&&a.date===date);if(old){old.note='Duplicate punch ignored';await saveItem('memberAtt',old);return {ok:true,duplicate:true,message:'Duplicate punch ignored',person:m};}const expired=memberExpired(m);const rec={id:String(m.id)+'_'+date,memberId:String(m.id),personId:String(m.id),deviceUserId:m.deviceUserId,memberName:m.name,personName:m.name,personType:'Member',phone:m.phone||'',date,time,status:'present',batchId:'',batchName:'Any time / Open gym',adminId:ADMIN_UID,method:'biometric',membershipStatus:expired?'Expired':'Active',renewalReminderRequired:expired,device:'ZKTeco K40 Pro',createdAt:new Date().toISOString()};await saveItem('memberAtt',rec);return {ok:true,expired,message:expired?`Attendance marked, but membership expired: ${m.name}`:`Attendance marked: ${m.name}`,person:m};}
-async function saveStaffBioAttendance(matched,date,time){const s=(DB.staff||[]).find(x=>String(x.id)===String(matched.personId));if(!s)return {ok:false,message:'Staff not found'};ensurePersonBioFields(s,'staff');const shift=currentStaffShiftByTime(time,s);if(!shift){await saveItem('unmatchedBiometricLogs',{id:'outside_'+String(s.id)+'_'+date+'_'+time.replace(':',''),deviceUserId:s.deviceUserId,punchDate:date,punchTime:time,reason:'Punch outside shift time',personId:String(s.id),personName:s.name,deviceName:'ZKTeco K40 Pro',createdAt:new Date().toISOString(),adminId:ADMIN_UID});return {ok:false,message:'Punch outside shift time'};}const old=(DB.staffAtt||[]).find(a=>String(a.staffId)===String(s.id)&&a.date===date&&a.shiftName===shift.shiftName);if(old)return {ok:true,duplicate:true,message:`${shift.shiftName} duplicate punch ignored`};const stat=staffShiftStatus(shift,time);const rec={id:String(s.id)+'_'+date+'_'+shift.shiftName,staffId:String(s.id),personId:String(s.id),deviceUserId:s.deviceUserId,staffName:s.name,personName:s.name,personType:'Staff',phone:s.phone||'',date,time,shiftName:shift.shiftName,checkInTime:time,shiftStatus:stat.shiftStatus,lateStatus:stat.lateStatus,status:stat.status,adminId:ADMIN_UID,method:'biometric',device:'ZKTeco K40 Pro',createdAt:new Date().toISOString()};await saveItem('staffAtt',rec);return {ok:true,message:`${shift.shiftName} marked: ${s.name} - ${stat.shiftStatus} (${stat.lateStatus})`};}
+async function saveStaffBioAttendance(matched,date,time){
+  const s=(DB.staff||[]).find(x=>String(x.id)===String(matched.personId));
+  if(!s)return {ok:false,message:'Staff not found'};
+  ensurePersonBioFields(s,'staff');
+  const shift=currentStaffShiftByTime(time,s);
+  if(!shift){
+    await saveItem('unmatchedBiometricLogs',{id:'outside_'+String(s.id)+'_'+date+'_'+time.replace(':',''),deviceUserId:s.deviceUserId,punchDate:date,punchTime:time,reason:'Punch outside shift time',personId:String(s.id),personName:s.name,personType:'Staff',deviceName:'ZKTeco K40 Pro',createdAt:new Date().toISOString(),adminId:ADMIN_UID});
+    return {ok:false,message:'Punch outside shift time'};
+  }
+  const recId=String(s.id)+'_'+date+'_'+shift.shiftName;
+  const old=(DB.staffAtt||[]).find(a=>a.id===recId);
+  // First punch of the shift = IN. Latest punch so far = OUT. Any punch in between is ignored automatically
+  // because it won't be earlier than checkInTime or later than checkOutTime.
+  let checkInTime, checkOutTime;
+  if(!old){
+    checkInTime=time; checkOutTime=time;
+  } else {
+    const prevIn = old.checkInTime||old.time||time;
+    const prevOut = old.checkOutTime||prevIn;
+    checkInTime = minOf(time) < minOf(prevIn) ? time : prevIn;
+    checkOutTime = minOf(time) > minOf(prevOut) ? time : prevOut;
+  }
+  // Full/Half decided ONLY by checkout time vs shift end time (exit-based rule)
+  const isFull = minOf(checkOutTime) >= minOf(shift.endTime);
+  const stat = isFull
+    ? {shiftStatus:'Full',lateStatus:'Completed shift',status:'present'}
+    : {shiftStatus:'Half',lateStatus:'Left before shift end',status:'half'};
+  const rec={id:recId,staffId:String(s.id),personId:String(s.id),deviceUserId:s.deviceUserId,staffName:s.name,personName:s.name,personType:'Staff',phone:s.phone||'',date,time,shiftName:shift.shiftName,checkInTime,checkOutTime,shiftEndTime:shift.endTime,shiftStatus:stat.shiftStatus,lateStatus:stat.lateStatus,status:stat.status,adminId:ADMIN_UID,method:'biometric',device:'ZKTeco K40 Pro',createdAt:old?old.createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  await saveItem('staffAtt',rec);
+  return {ok:true,message:`${shift.shiftName}: ${s.name} - IN ${checkInTime} / OUT ${checkOutTime} (${stat.shiftStatus})`};
+}
 async function bioImportJsonLogs(){try{const txt=document.getElementById('bio-log-json')?.value||'[]';const arr=JSON.parse(txt);if(!Array.isArray(arr))throw new Error('JSON must be an array');let saved=0,dups=0,unmatched=0;for(const item of arr){const normalized=normalizeK40Log(item);const r=await saveRawK40Log(normalized);if(!r.ok){unmatched++;continue;}if(r.duplicate){dups++;continue;}saved++;const processed=await processK40RawLog(Object.assign({id:rawLogDocId(normalized)},normalized));if(processed.unmatched)unmatched++;}const dev=bioSettings();dev.lastSyncTime=new Date().toISOString();dev.totalSyncedLogs=(DB.biometricRawLogs||[]).length;dev.connectionStatus='Synced';await saveDoc('settings',ADMIN_UID,DB.settings);bioSetStatus('Sync complete','connected');bioHealthOut(bioResultRow('K40 Sync',true,`Saved ${saved}, duplicates ${dups}, unmatched ${unmatched}`));renderBioPageParts();renderDashboard();showToast('K40 logs processed','ok');}catch(e){bioHealthOut(bioResultRow('K40 Sync',false,e.message||String(e)));showToast('Invalid K40 log import','err');}}
 function bioSeedSampleLog(){const id=(DB.members||[])[0]?.deviceUserId||(DB.staff||[])[0]?.deviceUserId||'M1001';const sample=[{deviceUserId:id,punchDate:td(),punchTime:new Date().toTimeString().slice(0,5),deviceName:'ZKTeco K40 Pro',rawLogId:'sample_'+Date.now()}];const el=document.getElementById('bio-log-json');if(el)el.value=JSON.stringify(sample,null,2);}
 async function bioSyncNow(){bioSetStatus('Waiting for K40 export/API payload','scanning');bioHealthOut(bioResultRow('Sync Now',true,'Paste K40 Pro logs as JSON and click Import & Process Logs. Direct LAN fetch can be connected to a local ZKTeco middleware endpoint later.'));const dev=bioSettings();dev.connectionStatus='Ready for import/API';await saveDoc('settings',ADMIN_UID,DB.settings);loadBioDeviceSettings();}
@@ -2742,7 +2836,7 @@ async function bioSetEnrollmentStatus(status){if(!bioEnrollTarget){showToast('Se
 function renderEnrolled(){const filter=document.getElementById('bio-enroll-filter')?.value||'';let rows=[];(DB.members||[]).forEach(m=>rows.push(Object.assign({kind:'member'},ensurePersonBioFields(m,'member'))));(DB.staff||[]).forEach(s=>rows.push(Object.assign({kind:'staff'},ensurePersonBioFields(s,'staff'))));if(filter)rows=rows.filter(r=>r.kind===filter);const cnt=document.getElementById('bio-enroll-cnt');if(cnt)cnt.textContent=rows.filter(r=>r.biometricStatus==='Enrolled').length+' enrolled';const tb=document.getElementById('bio-enrolled-tb');if(!tb)return;tb.innerHTML=rows.length?rows.map(p=>`<tr><td><b>${escHtml(p.name)}</b></td><td><span class="pill ${p.kind==='staff'?'pb':'pg'}">${p.personType}</span></td><td><b>${escHtml(p.deviceUserId)}</b></td><td>${escHtml(p.biometricStatus||'Not Enrolled')}</td><td>${escHtml(p.phone||'')}</td><td><button class="btn bo bxs" onclick="copyText('${p.deviceUserId}')">Copy ID</button><button class="btn bg bxs" onclick="quickMarkBio('${p.kind}','${p.id}')">Enrolled</button></td></tr>`).join(''):'<tr><td colspan="6"><div class="emp"><p>No members or staff yet.</p></div></td></tr>';}
 function copyText(text){navigator.clipboard&&navigator.clipboard.writeText(text);showToast('Copied: '+text,'ok');}
 async function quickMarkBio(type,id){const list=type==='staff'?DB.staff:DB.members, p=list.find(x=>String(x.id)===String(id));if(!p)return;ensurePersonBioFields(p,type);p.biometricStatus='Enrolled';p.biometricEnrolled=true;await saveItem(type==='staff'?'staff':'members',p);renderEnrolled();showToast('Marked enrolled','ok');}
-function renderBioRawLogs(){const el=document.getElementById('bio-live-feed');if(!el)return;const list=(DB.biometricRawLogs||[]).slice().sort((a,b)=>String(b.syncedAt||'').localeCompare(String(a.syncedAt||''))).slice(0,40);el.innerHTML=list.length?list.map(r=>`<div class="hb"><b>${escHtml(r.deviceUserId)}</b><span style="float:right">${escHtml(r.punchDate)} ${escHtml(r.punchTime)}</span><div style="font-size:11px;color:var(--text3)">${escHtml(r.deviceName||'ZKTeco K40 Pro')} | ${r.processed?'Processed':'Pending'}</div></div>`).join(''):'<div class="emp" style="padding:28px"><p>No raw logs synced yet.</p></div>';}
+function renderBioRawLogs(){const el=document.getElementById('bio-live-feed');if(!el)return;const list=(DB.biometricRawLogs||[]).slice().sort((a,b)=>String(b.syncedAt||'').localeCompare(String(a.syncedAt||''))).slice(0,40);el.innerHTML=list.length?list.map(r=>{const label=r.personName?escHtml(r.personName):escHtml(r.deviceUserId);const typeTag=r.personType?`<span class="pill ${r.personType==='Staff'?'pb':'pg'}" style="margin-left:6px">${escHtml(r.personType)}</span>`:'';return `<div class="hb"><b>${label}</b>${typeTag}<span style="float:right">${escHtml(r.punchDate)} ${escHtml(r.punchTime)}</span><div style="font-size:11px;color:var(--text3)">ID: ${escHtml(r.deviceUserId)} • ${escHtml(r.deviceName||'ZKTeco K40 Pro')} | ${r.processed?'Processed':'Pending'}</div></div>`;}).join(''):'<div class="emp" style="padding:28px"><p>No raw logs synced yet.</p></div>';}
 function renderUnmatchedLogs(){const el=document.getElementById('bio-summary');if(!el)return;const list=(DB.unmatchedBiometricLogs||[]).slice().reverse().slice(0,30);el.innerHTML=list.length?list.map(r=>`<div class="hb hb-r"><b>${escHtml(r.deviceUserId||'Missing ID')}</b><span style="float:right">${escHtml(r.punchDate||'')} ${escHtml(r.punchTime||'')}</span><div style="font-size:11px;color:var(--text3)">${escHtml(r.reason||'Unmatched')}</div></div>`).join(''):'<p style="color:var(--text3);font-size:13px">No unmatched logs.</p>';}
 function savedBioFeed(date){const d=date||td(), rows=[];(DB.memberAtt||[]).filter(a=>a.date===d&&a.method==='biometric').forEach(a=>rows.push({type:'member',name:a.memberName||a.personName,date:d,time:a.time||'',status:a.status||'present'}));(DB.staffAtt||[]).filter(a=>a.date===d&&a.method==='biometric').forEach(a=>rows.push({type:'staff',name:a.staffName||a.personName,date:d,time:a.time||a.checkInTime||'',status:a.status||'present'}));return rows;}
 function updBioStats(){const tc=document.getElementById('bio-today-count'), uc=document.getElementById('bio-unmatched-count');if(tc)tc.textContent=savedBioFeed(td()).length;if(uc)uc.textContent=(DB.unmatchedBiometricLogs||[]).length;loadBioDeviceSettings();}
@@ -2774,7 +2868,7 @@ function go(name){
     members:renderMembers,
     history:renderHist,
     reports:renderReports,
-    expiry:()=>renderExpiry(curExpTab),
+    expiry:()=>renderExp(),
     attendance:()=>{renderAtt();renderAttToday();},
     batches:renderBatches,
     diet:()=>{renderDietPreview('loss');renderDietTable();},
@@ -2796,6 +2890,7 @@ function go(name){
 // ── LOAD STAFF ACCOUNTS ──────────────────────────────────────
 async function loadStaffAccounts(){
   const el=document.getElementById('staff-accounts-list');if(!el)return;
+  if(LOCAL_MODE||!db){el.innerHTML='<p style="color:var(--text3);font-size:13px">Staff accounts require Firebase cloud mode.</p>';return;}
   try{
     const snap=await db.collection('users').where('adminId','==',ADMIN_UID).where('role','==','staff').get();
     if(!snap.docs.length){el.innerHTML='<p style="color:var(--text3);font-size:13px">No staff accounts yet. Add one above.</p>';return;}
@@ -2825,6 +2920,3 @@ function initApp(){
 </script>
 </body>
 </html>
-
-
-
