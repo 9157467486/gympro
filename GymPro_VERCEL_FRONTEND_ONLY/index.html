@@ -10,6 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -767,6 +769,32 @@ tr:hover td{background:#fafbff}
     <div class="sc sc-r"><div class="sc-ico" style="background:#fef2f2">💸</div><div class="sc-num" id="r4" style="color:var(--red)">₹0</div><div class="sc-lbl">Salary Paid (Month)</div></div>
     <div class="sc sc-o"><div class="sc-ico" style="background:#fff7ed">💡</div><div class="sc-num" id="r5" style="color:var(--orange)">₹0</div><div class="sc-lbl">Expenses (Month)</div></div>
     <div class="sc sc-g"><div class="sc-ico" style="background:#ecfdf5">💹</div><div class="sc-num" id="r6" style="color:var(--green)">₹0</div><div class="sc-lbl">Net Profit (Month)</div></div>
+  </div>
+  <div class="g2" style="margin-bottom:16px">
+    <div class="sec"><div class="sh"><h3>👥 Member Report</h3></div>
+      <div class="sb2">
+        <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Name, Phone, Plan, Join/Expiry Date, Status, Attendance Summary, Payment Status</p>
+        <div class="fgrid" style="margin-bottom:12px">
+          <div class="fg"><label>Status Filter</label><select id="mr-status-filter"><option value="">All Members</option><option value="active">Active Only</option><option value="expiring">Expiring Soon</option><option value="expired">Expired Only</option></select></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn bg" onclick="exportMemberReportExcel()">📊 Export Excel</button>
+          <button class="btn br" onclick="exportMemberReportPDF()">📄 Export PDF</button>
+        </div>
+      </div>
+    </div>
+    <div class="sec"><div class="sh"><h3>👨‍💼 Staff Report</h3></div>
+      <div class="sb2">
+        <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Name, Role, Daily In/Out/Shift, Total Working Days, Final Salary</p>
+        <div class="fgrid" style="margin-bottom:12px">
+          <div class="fg"><label>Month</label><input type="month" id="sr-month"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn bg" onclick="exportStaffReportExcel()">📊 Export Excel</button>
+          <button class="btn br" onclick="exportStaffReportPDF()">📄 Export PDF</button>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="sec" style="margin-bottom:16px"><div class="sh"><h3>📆 Monthly Breakdown</h3><div style="display:flex;gap:8px"><button class="btn bo bsm" onclick="expPayCSV()">📥 CSV</button><button class="btn bo bsm" onclick="window.print()">🖨 Print</button></div></div>
     <div class="snp"><div class="tw"><table><thead><tr><th>Month</th><th>Payments</th><th>Revenue</th><th>Salary</th><th>Expenses</th><th>Net Profit</th></tr></thead><tbody id="rep-tb"></tbody></table></div></div>
@@ -2095,6 +2123,118 @@ async function doExcelImport() {
 }
 
 // ── TOTAL DUE REPORT ─────────────────────────────────────────
+// ── PDF / EXCEL REPORT EXPORTS ─────────────────────────────────
+function memberMonthAttendanceCount(memberId, mon){
+  return (DB.memberAtt||[]).filter(a=>String(a.memberId)===String(memberId)&&(a.date||'').startsWith(mon)&&a.status!=='absent').length;
+}
+function memberPaymentStatusText(m){
+  const due=latestDueForMember(m);
+  return due>0 ? `Pending ${fmtINR(due)}` : 'Paid Up';
+}
+function filteredMemberReportRows(){
+  const filter=document.getElementById('mr-status-filter')?.value||'';
+  const mon=td().slice(0,7);
+  let list=(DB.members||[]).slice();
+  if(filter) list=list.filter(m=>getSt(m)===filter);
+  return list.map(m=>({
+    Name:m.name||'', Phone:m.phone||'', Plan:m.planName||'',
+    'Join Date':fmtD(m.joindate||m.createdAt)||'', 'Expiry Date':fmtD(m.expiry)||'',
+    Status: getSt(m)==='active'?'Active':getSt(m)==='expiring'?'Expiring Soon':getSt(m)==='expired'?'Expired':'Never Paid',
+    'Attendance (This Month)': memberMonthAttendanceCount(m.id, mon),
+    'Payment Status': memberPaymentStatusText(m)
+  }));
+}
+function pdfHeader(doc, title){
+  const g=DB.settings||{};
+  doc.setFontSize(16); doc.setTextColor(26,86,219); doc.text(g.gymName||'GymPro', 40, 40);
+  doc.setFontSize(9); doc.setTextColor(100);
+  doc.text(`${g.address||''} ${g.city?'- '+g.city:''}`.trim(), 40, 56);
+  doc.text(`${g.phone?'Phone: '+g.phone:''}`, 40, 70);
+  doc.setFontSize(13); doc.setTextColor(15,23,42);
+  doc.text(title, 40, 96);
+  doc.setFontSize(9); doc.setTextColor(120);
+  doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 40, 112);
+  return 130;
+}
+function exportMemberReportExcel(){
+  const rows=filteredMemberReportRows();
+  if(!rows.length){showToast('No members match this filter','warn');return;}
+  const ws=XLSX.utils.json_to_sheet(rows);
+  ws['!cols']=[{wch:22},{wch:14},{wch:16},{wch:12},{wch:12},{wch:14},{wch:20},{wch:16}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Members');
+  XLSX.writeFile(wb, `Member-Report-${td()}.xlsx`);
+  showToast('Member report Excel downloaded','ok');
+}
+function exportMemberReportPDF(){
+  const rows=filteredMemberReportRows();
+  if(!rows.length){showToast('No members match this filter','warn');return;}
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape'});
+  const startY = pdfHeader(doc, 'Member Report');
+  doc.autoTable({
+    startY,
+    head:[['Name','Phone','Plan','Join Date','Expiry Date','Status','Attendance (Month)','Payment Status']],
+    body: rows.map(r=>[r.Name,r.Phone,r.Plan,r['Join Date'],r['Expiry Date'],r.Status,r['Attendance (This Month)'],r['Payment Status']]),
+    headStyles:{fillColor:[26,86,219]}, styles:{fontSize:8,cellPadding:5}, alternateRowStyles:{fillColor:[240,244,255]}
+  });
+  doc.save(`Member-Report-${td()}.pdf`);
+  showToast('Member report PDF downloaded','ok');
+}
+function staffMonthDailyRows(staff, mon){
+  return (DB.staffAtt||[]).filter(a=>String(a.staffId)===String(staff.id)&&(a.date||'').startsWith(mon))
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date)))
+    .map(a=>({Staff:staff.name,Date:fmtD(a.date),Shift:a.shiftName||'-',In:a.checkInTime||a.time||'-',Out:a.checkOutTime||'-',Status:a.shiftStatus||a.status||''}));
+}
+function exportStaffReportExcel(){
+  const mon=document.getElementById('sr-month')?.value||td().slice(0,7);
+  if(!DB.staff.length){showToast('No staff added yet','warn');return;}
+  const summaryRows=DB.staff.map(s=>{
+    const r=calcStaffSalary(s,mon);
+    return {Name:s.name,Role:s.role||'',
+      'Total Working Days':r.totalDays,'Full Days':r.fullDays,'Half Days':r.halfDays,'Absent Days':r.absentDays,
+      'Base Salary':r.staff.salary||0,'Deduction':r.deduction,'Final Payable':r.earned};
+  });
+  let dailyRows=[];
+  DB.staff.forEach(s=>{ dailyRows=dailyRows.concat(staffMonthDailyRows(s,mon)); });
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.json_to_sheet(summaryRows); ws1['!cols']=[{wch:20},{wch:14},{wch:14},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Salary Summary');
+  const ws2=XLSX.utils.json_to_sheet(dailyRows.length?dailyRows:[{Staff:'No records',Date:'',Shift:'',In:'',Out:'',Status:''}]); ws2['!cols']=[{wch:20},{wch:12},{wch:14},{wch:8},{wch:8},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Daily Attendance');
+  XLSX.writeFile(wb, `Staff-Report-${mon}.xlsx`);
+  showToast('Staff report Excel downloaded','ok');
+}
+function exportStaffReportPDF(){
+  const mon=document.getElementById('sr-month')?.value||td().slice(0,7);
+  if(!DB.staff.length){showToast('No staff added yet','warn');return;}
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape'});
+  let startY = pdfHeader(doc, `Staff Report - ${fmtM(mon)}`);
+  const summaryRows=DB.staff.map(s=>{
+    const r=calcStaffSalary(s,mon);
+    return [s.name, s.role||'', r.totalDays, r.fullDays, r.halfDays, r.absentDays, fmtINR(r.staff.salary||0), fmtINR(r.deduction), fmtINR(r.earned)];
+  });
+  doc.autoTable({
+    startY,
+    head:[['Name','Role','Working Days','Full','Half','Absent','Base Salary','Deduction','Final Payable']],
+    body: summaryRows,
+    headStyles:{fillColor:[26,86,219]}, styles:{fontSize:8,cellPadding:5}, alternateRowStyles:{fillColor:[240,244,255]}
+  });
+  doc.addPage();
+  let startY2 = pdfHeader(doc, `Staff Daily Attendance - ${fmtM(mon)}`);
+  let dailyRows=[];
+  DB.staff.forEach(s=>{ staffMonthDailyRows(s,mon).forEach(r=>dailyRows.push([r.Staff,r.Date,r.Shift,r.In,r.Out,r.Status])); });
+  doc.autoTable({
+    startY: startY2,
+    head:[['Staff','Date','Shift','In','Out','Status']],
+    body: dailyRows.length?dailyRows:[['No attendance records for this month','','','','','']],
+    headStyles:{fillColor:[26,86,219]}, styles:{fontSize:8,cellPadding:5}, alternateRowStyles:{fillColor:[240,244,255]}
+  });
+  doc.save(`Staff-Report-${mon}.pdf`);
+  showToast('Staff report PDF downloaded','ok');
+}
+
 function totalDueReport() {
   const due=DB.members.map(m=>{const lp=DB.payments.filter(p=>p.memberId==m.id).slice(-1)[0];return{...m,due:lp?+lp.balance||0:0};}).filter(m=>m.due>0);
   const total=due.reduce((s,m)=>s+m.due,0);
@@ -2908,7 +3048,7 @@ function initApp(){
   loadSettings();renderDietPreview('loss');renderPTPreview();loadPTSettings();loadWATmpl();
   const today=new Date();
   ['amj','fed','atd','exd','sfj'].forEach(id=>{const el=document.getElementById(id);if(el)el.valueAsDate=today;});
-  ['slmon','sa-fm','at-fm','mr-mon','sc-month'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=today.toISOString().slice(0,7);});
+  ['slmon','sa-fm','at-fm','mr-mon','sc-month','sr-month'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=today.toISOString().slice(0,7);});
   const sasd=document.getElementById('sasd');if(sasd)sasd.valueAsDate=today;
   const scdate=document.getElementById('sc-date');if(scdate)scdate.valueAsDate=today;
   updBadge();
